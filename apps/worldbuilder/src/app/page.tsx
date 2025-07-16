@@ -1,15 +1,41 @@
-"use client";
-import React, { useEffect, useState } from "react";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { World, WorldFormSchema } from "world_schema";
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+'use client';
+import React, { useEffect, useState } from 'react';
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { World, WorldFormSchema } from 'world_schema';
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from '@/components/ui/form';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from '@/components/ui/card';
+import Link from 'next/link';
 
 export default function WorldsPage() {
   const [worlds, setWorlds] = useState<World[]>([]);
@@ -18,9 +44,9 @@ export default function WorldsPage() {
   const form = useForm({
     resolver: zodResolver(WorldFormSchema),
     defaultValues: {
-      name: "",
-      description: "",
-      theme: "fantasy",
+      name: '',
+      description: '',
+      theme: 'fantasy',
       contextWindowLimit: 1024,
     },
   });
@@ -29,7 +55,7 @@ export default function WorldsPage() {
   useEffect(() => {
     async function fetchWorlds() {
       setLoading(true);
-      const res = await fetch("/api/worlds");
+      const res = await fetch('/api/worlds');
       const data = await res.json();
       setWorlds(data);
       setLoading(false);
@@ -38,9 +64,9 @@ export default function WorldsPage() {
   }, []);
 
   const onSubmit = async (data: Partial<World>) => {
-    const res = await fetch("/api/worlds", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const res = await fetch('/api/worlds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const newWorld = await res.json();
@@ -57,22 +83,26 @@ export default function WorldsPage() {
           <div>Loading...</div>
         ) : (
           worlds.map((world) => (
-            <Card key={world.id}>
-              <CardHeader>
-                <CardTitle>{world.name}</CardTitle>
-                <CardDescription>{world.theme}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p>{world.description}</p>
-                <p className="text-xs text-muted-foreground mt-2">Context Window Limit: {world.contextWindowLimit}</p>
-              </CardContent>
-            </Card>
+            <Link href={`/worlds/${world.id}`} key={world.id}>
+              <Card>
+                <CardHeader>
+                  <CardTitle>{world.name}</CardTitle>
+                  <CardDescription>{world.theme}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p>{world.description}</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Context Window Limit: {world.contextWindowLimit}
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
           ))
         )}
       </div>
       <Dialog>
         <DialogTrigger asChild>
-          <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded">Create World</button>
+          <Button>Create World</Button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
@@ -113,7 +143,11 @@ export default function WorldsPage() {
                   <FormItem>
                     <FormLabel>Theme</FormLabel>
                     <FormControl>
-                      <Select {...field} onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        {...field}
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select theme" />
                         </SelectTrigger>
@@ -150,4 +184,3 @@ export default function WorldsPage() {
     </main>
   );
 }
-
