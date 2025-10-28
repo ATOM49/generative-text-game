@@ -18,3 +18,50 @@ model World {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
+
+model WorldMap {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  worldId     String
+  description String?
+  regions     Region[]
+}
+
+model Region {
+  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  boundary     Json        // Array of coordinates
+  terrain      String[]    // Array of terrain types
+  climate      String
+  worldMapId   String      @db.ObjectId
+  worldMap     WorldMap    @relation(fields: [worldMapId], references: [id])
+  waterBodies  WaterBody[]
+  rivers       River[]
+  features     Feature[]
+}
+
+model WaterBody {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  type      String
+  polygon   Json     // Array of coordinates
+  regionId  String   @db.ObjectId
+  region    Region   @relation(fields: [regionId], references: [id])
+}
+
+model River {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  path           Json     // Array of coordinates
+  sourceRegionId String
+  mouthRegionId  String
+  regionId       String   @db.ObjectId
+  region         Region   @relation(fields: [regionId], references: [id])
+}
+
+model Feature {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  type      String
+  location  Json     // Coordinate
+  regionId  String   @db.ObjectId
+  region    Region   @relation(fields: [regionId], references: [id])
+}

@@ -1,8 +1,12 @@
+import { EntityLayout } from '@/components/entity-layout';
+
 export default function RulesPage() {
   return (
-    <div>
-      <h1>Rules</h1>
-      <p>This is the rules page for the selected world.</p>
-    </div>
+    <EntityLayout
+      header="Rules"
+      subheader="This is the rules page for the selected world."
+    >
+      <div />
+    </EntityLayout>
   );
 }

@@ -29,7 +29,7 @@ export function AppSidebar() {
   const path = usePathname() || '';
 
   const tabs = [
-    { slug: 'locations', label: 'Locations & Regions', icon: Globe },
+    { slug: 'map', label: 'World Map', icon: Globe },
     { slug: 'factions', label: 'Factions & Cultures', icon: Users },
     { slug: 'species', label: 'Species & Entities', icon: Dog },
     { slug: 'rules', label: 'Global Rules', icon: Settings },
