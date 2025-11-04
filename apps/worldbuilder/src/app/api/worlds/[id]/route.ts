@@ -1,30 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { WorldService } from '@/lib/api/world.service';
+import { WorldFormSchema } from '@talespin/schema';
+import { handleApiError } from '@/lib/api/errors';
+import { prisma } from '@/lib/prisma';
 
-const prisma = new PrismaClient();
+const worldService = new WorldService(prisma);
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: { id: string } },
-) {
-  const world = await prisma.world.findUnique({ where: { id: params.id } });
-  if (!world) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json(world);
+type Props = {
+  params: { id: string };
+};
+
+export async function GET(_req: NextRequest, { params }: Props) {
+  try {
+    const { id } = await params;
+    const world = await worldService.getWorld(id);
+    return NextResponse.json(world);
+  } catch (error) {
+    return handleApiError(error);
+  }
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } },
-) {
-  const data = await req.json();
-  const updated = await prisma.world.update({ where: { id: params.id }, data });
-  return NextResponse.json(updated);
+export async function PUT(req: NextRequest, { params }: Props) {
+  try {
+    const data = await req.json();
+    const { id } = await params;
+    const validatedData = WorldFormSchema.parse(data);
+
+    const world = await worldService.updateWorld(id, validatedData);
+    return NextResponse.json(world);
+  } catch (error) {
+    return handleApiError(error);
+  }
 }
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: { id: string } },
-) {
-  await prisma.world.delete({ where: { id: params.id } });
-  return NextResponse.json({ success: true });
+export async function DELETE(_req: NextRequest, { params }: Props) {
+  try {
+    const { id } = await params;
+    await worldService.deleteWorld(id);
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    return handleApiError(error);
+  }
 }

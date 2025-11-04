@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Canvas, Circle, Line, Point, Polygon, Image } from 'fabric';
 // Import correct event type
 import type { TPointerEventInfo } from 'fabric';
-import { useFormContext, useWatch } from 'react-hook-form';
 
 type Tool = 'select' | 'polygon' | 'line' | 'dot';
 
@@ -21,12 +20,75 @@ interface RelativeShape {
   style?: any;
 }
 
+// --- Background image helper ---
+async function loadBackgroundImage(
+  fabricCanvas: Canvas,
+  imageUrl: string,
+): Promise<void> {
+  console.log('[loadBackgroundImage] Loading from:', imageUrl);
+
+  // Use Fabric's Image.fromURL to load the image
+  const fabricImg = await Image.fromURL(imageUrl, {
+    crossOrigin: 'anonymous',
+  });
+
+  console.log('[loadBackgroundImage] Image loaded:', {
+    width: fabricImg.width,
+    height: fabricImg.height,
+  });
+
+  const canvasWidth = fabricCanvas.getWidth();
+  const canvasHeight = fabricCanvas.getHeight();
+
+  // Calculate scaling to fit canvas while maintaining aspect ratio
+  const imgWidth = fabricImg.width || 1;
+  const imgHeight = fabricImg.height || 1;
+  const imgAspectRatio = imgWidth / imgHeight;
+  const canvasAspectRatio = canvasWidth / canvasHeight;
+
+  let scale;
+  if (imgAspectRatio > canvasAspectRatio) {
+    scale = canvasWidth / imgWidth;
+  } else {
+    scale = canvasHeight / imgHeight;
+  }
+
+  // Set image properties
+  fabricImg.set({
+    scaleX: scale,
+    scaleY: scale,
+    left: 0,
+    top: 0,
+    selectable: false,
+    evented: false,
+  });
+
+  // Set as background using Fabric's property
+  fabricCanvas.backgroundImage = fabricImg;
+  fabricCanvas.renderAll();
+  console.log('[loadBackgroundImage] Background set successfully');
+}
+// --- end helper ---
+
 interface MapEditorProps {
   imageUrl: string;
   onRegionCreated?: (boundary: [number, number][]) => void;
   onPolygonToolActivated?: () => void;
   activeRegionId?: string | null;
   activatePolygonTool?: boolean;
+}
+
+// Helper to convert external URLs to proxied URLs
+function getProxiedImageUrl(imageUrl: string): string {
+  // Check if it's an external URL that needs proxying
+  if (
+    imageUrl.includes('oaidalleapiprodscus.blob.core.windows.net') ||
+    imageUrl.includes('dalleprodsec.blob.core.windows.net') ||
+    imageUrl.includes('cdn.openai.com')
+  ) {
+    return `/api/images/proxy?url=${encodeURIComponent(imageUrl)}`;
+  }
+  return imageUrl;
 }
 
 export default function MapEditor({
@@ -44,7 +106,6 @@ export default function MapEditor({
 
   // Store shapes with relative coordinates
   const [shapes, setShapes] = useState<RelativeShape[]>([]);
-  const backgroundImageRef = useRef<Image | null>(null);
   const canvasSizeRef = useRef({ width: 0, height: 0 });
 
   // Effect to activate polygon tool when requested
@@ -60,7 +121,6 @@ export default function MapEditor({
   //   const { control } = useFormContext();
 
   //   const description = useWatch({ control, name: 'description' });
-  //   console.log({ description });
 
   // Helper functions for coordinate conversion
   const toRelative = useCallback(
@@ -139,75 +199,38 @@ export default function MapEditor({
     });
 
     canvas.renderAll();
-  }, [shapes, toAbsolute]); // Initialize canvas
+  }, [shapes, toAbsolute]);
+
+  // Initialize canvas
   useEffect(() => {
     if (!wrapperRef.current) return;
 
     const canvasEl = document.createElement('canvas');
     wrapperRef.current.appendChild(canvasEl);
 
+    // Get initial dimensions
+    const width = wrapperRef.current.clientWidth;
+    const height = wrapperRef.current.clientHeight;
+
     const fabricCanvas = new Canvas(canvasEl, {
+      width,
+      height,
       selection: true,
+      enableRetinaScaling: false,
+      imageSmoothingEnabled: true,
     });
 
     canvasRef.current = fabricCanvas;
+    canvasSizeRef.current = { width, height };
 
-    const setBackgroundImage = (fabricImg: Image) => {
-      const canvasWidth = fabricCanvas.width || 1024;
-      const canvasHeight = fabricCanvas.height || 768;
+    // Use proxied URL to avoid CORS issues
+    const proxiedImageUrl = getProxiedImageUrl(imageUrl);
+    console.log('[MapEditor] Initial load', { imageUrl, proxiedImageUrl });
 
-      // Calculate scaling to fit the canvas while maintaining aspect ratio
-      const imgAspectRatio = fabricImg.width! / fabricImg.height!;
-      const canvasAspectRatio = canvasWidth / canvasHeight;
-
-      let scale;
-      if (imgAspectRatio > canvasAspectRatio) {
-        // Image is wider relative to canvas, scale by width
-        scale = canvasWidth / fabricImg.width!;
-      } else {
-        // Image is taller relative to canvas, scale by height
-        scale = canvasHeight / fabricImg.height!;
-      }
-
-      fabricImg.set({
-        scaleX: scale,
-        scaleY: scale,
-        left: 0,
-        top: 0,
-      });
-
-      fabricCanvas.backgroundImage = fabricImg;
-      backgroundImageRef.current = fabricImg;
-      fabricCanvas.renderAll();
-    };
-
-    const resizeCanvas = () => {
-      const width = wrapperRef.current!.clientWidth;
-      const height = wrapperRef.current!.clientHeight;
-
-      // Store current canvas size for coordinate calculations
-      canvasSizeRef.current = { width, height };
-
-      canvasEl.width = width;
-      canvasEl.height = height;
-      fabricCanvas.setWidth(width);
-      fabricCanvas.setHeight(height);
-
-      // Resize background image if it exists
-      if (backgroundImageRef.current) {
-        setBackgroundImage(backgroundImageRef.current);
-      }
-
-      // Redraw all shapes with updated coordinates
-      redrawShapes();
-    };
-
-    // Load background image
-    Image.fromURL(imageUrl)
-      .then((fabricImg) => {
-        setBackgroundImage(fabricImg);
-      })
-      .catch(console.error);
+    // Load background image using simplified Fabric.js method
+    loadBackgroundImage(fabricCanvas, proxiedImageUrl).catch((error) => {
+      console.error('[MapEditor] Failed to load background image:', error);
+    });
 
     // Add ResizeObserver to detect when the wrapper element resizes
     const resizeObserver = new ResizeObserver((entries) => {
@@ -225,28 +248,9 @@ export default function MapEditor({
           canvas.setWidth(width);
           canvas.setHeight(height);
 
-          // Resize background image
-          if (backgroundImageRef.current) {
-            const fabricImg = backgroundImageRef.current;
-            const imgAspectRatio = fabricImg.width! / fabricImg.height!;
-            const canvasAspectRatio = width / height;
-
-            let scale;
-            if (imgAspectRatio > canvasAspectRatio) {
-              scale = width / fabricImg.width!;
-            } else {
-              scale = height / fabricImg.height!;
-            }
-
-            fabricImg.set({
-              scaleX: scale,
-              scaleY: scale,
-              left: 0,
-              top: 0,
-            });
-
-            canvas.backgroundImage = fabricImg;
-          }
+          // Reload background image for the new canvas size
+          const proxiedImageUrl = getProxiedImageUrl(imageUrl);
+          loadBackgroundImage(canvas, proxiedImageUrl).catch(console.error);
 
           // Redraw all shapes
           redrawShapes();
@@ -260,7 +264,7 @@ export default function MapEditor({
       resizeObserver.disconnect();
       fabricCanvas.dispose();
     };
-  }, [imageUrl]);
+  }, [imageUrl, redrawShapes]);
 
   // Handle redrawing only when importing shapes
   const isImporting = useRef(false);
@@ -297,7 +301,6 @@ export default function MapEditor({
           type: 'dot',
           points: [relativePoint],
         };
-        console.log({ newShape });
         setShapes((prev) => [...prev, newShape]);
         (circle as any).shapeId = newShape.id;
       }
@@ -412,7 +415,6 @@ export default function MapEditor({
     };
   }, [exportShapes, importShapes, shapes]);
 
-  console.log({ shapes });
   return (
     <div className="w-full h-screen relative">
       <div className="absolute top-4 left-4 z-10 bg-white rounded shadow-md p-2 space-x-2 flex flex-wrap items-center">

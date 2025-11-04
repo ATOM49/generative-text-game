@@ -1,5 +1,5 @@
 'use client';
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogTrigger,
@@ -19,10 +19,19 @@ import {
 import Link from 'next/link';
 import { useApiQuery } from '@/hooks/useApiQuery';
 import WorldFormComponent from '@/components/form/world';
+import { PaginatedResponse } from '@/lib/api/types';
 
 export default function WorldsPage() {
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
   // Fetch worlds using useApiQuery
-  const { data: worlds = [], isLoading } = useApiQuery<World[]>('/api/worlds');
+  const { data, isLoading } =
+    useApiQuery<PaginatedResponse<World>>('/api/worlds');
+  const worlds = data?.data ?? [];
+
+  const handleWorldCreated = () => {
+    setIsDialogOpen(false);
+  };
 
   return (
     <main className="font-custom p-8">
@@ -33,14 +42,13 @@ export default function WorldsPage() {
           <div>Loading...</div>
         ) : (
           worlds.map((world) => (
-            <Link href={`/worlds/${world.id}`} key={world.id}>
+            <Link href={`/worlds/${world._id}`} key={world._id}>
               <Card>
                 <CardHeader>
                   <CardTitle>{world.name}</CardTitle>
                   <CardDescription>{world.theme}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <p>{world.rules}</p>
                   <p className="text-xs text-muted-foreground mt-2">
                     Context Window Limit: {world.contextWindowLimit}
                   </p>
@@ -50,15 +58,15 @@ export default function WorldsPage() {
           ))
         )}
       </div>
-      <Dialog>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogTrigger asChild>
           <Button>Create World</Button>
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent showCloseButton>
           <DialogHeader>
             <DialogTitle>Create a New World</DialogTitle>
           </DialogHeader>
-          <WorldFormComponent />
+          <WorldFormComponent onSuccess={handleWorldCreated} />
         </DialogContent>
       </Dialog>
     </main>

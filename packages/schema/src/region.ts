@@ -1,27 +1,19 @@
 import { z } from 'zod';
+import { Id, RelPolygon } from './common';
 
-export interface Region {
-  id: string;
-  name: string;
-  boundary: [number, number][];
-  terrain: string;
-  climate: string;
-}
+export const RegionBaseSchema = z.object({
+  name: z.string(),
+  parentRegionId: Id.nullish(),
+  geom: RelPolygon,
+  tags: z.array(z.string()).optional(),
+});
 
-export const RegionFormSchema = z
-  .object({
-    name: z.string().describe('Human-readable name for the region'),
-    boundary: z
-      .array(z.tuple([z.number(), z.number()]))
-      .min(3, 'Boundary must have at least 3 points')
-      .describe(
-        'Polygon boundary as an array of coordinates, allows any shape',
-      ),
-    terrain: z.string().describe('Terrain type for the region'),
-    climate: z.string().describe('Climate classification for the region'),
-  })
-  .describe(
-    'A region on the map, with flexible geometry, terrain, water, and adjacency.',
-  );
+export const RegionFormSchema = RegionBaseSchema;
 
+export const RegionSchema = RegionBaseSchema.extend({
+  _id: Id,
+  worldId: Id,
+});
+
+export type Region = z.infer<typeof RegionSchema>;
 export type RegionForm = z.infer<typeof RegionFormSchema>;

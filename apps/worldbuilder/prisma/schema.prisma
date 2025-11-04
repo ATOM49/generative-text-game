@@ -1,67 +1,246 @@
-// Prisma schema for MongoDB setup
-// See https://www.prisma.io/docs/orm/prisma-schema/data-model for MongoDB specifics
+// schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
 }
-generator client {
-  provider = "prisma-client-js"
+
+/**
+ * ---------- Enums ----------
+ */
+enum EntityType {
+  CHARACTER
+  FACTION
+  NPC
+  ITEM
+  QUEST
 }
 
+enum RelationshipType {
+  ally
+  enemy
+  memberOf
+  questGiver
+  owns
+  guards
+}
+
+enum MovementMode {
+  walk
+  horse
+  boat
+  fastTravel
+}
+
+enum EventCategory {
+  movement
+  combat
+  social
+  discovery
+  system
+}
+
+enum CampaignStatus {
+  active
+  completed
+  failed
+}
+
+/**
+ * ---------- Worlds ----------
+ */
 model World {
   id                 String   @id @default(auto()) @map("_id") @db.ObjectId
   name               String
   description        String?
   theme              String?
   contextWindowLimit Int?
+  version            Int      @default(1)
+  mapImageUrl        String?
+  settings           Json?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  @@index([name])
 }
 
-model WorldMap {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  worldId     String
-  description String?
-  regions     Region[]
-}
-
+/**
+ * ---------- Regions (polygon in rel coords) ----------
+ */
 model Region {
-  id           String      @id @default(auto()) @map("_id") @db.ObjectId
-  name         String
-  boundary     Json        // Array of coordinates
-  terrain      String[]    // Array of terrain types
-  climate      String
-  worldMapId   String      @db.ObjectId
-  worldMap     WorldMap    @relation(fields: [worldMapId], references: [id])
-  waterBodies  WaterBody[]
-  rivers       River[]
-  features     Feature[]
-}
-
-model WaterBody {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  type      String
-  polygon   Json     // Array of coordinates
-  regionId  String   @db.ObjectId
-  region    Region   @relation(fields: [regionId], references: [id])
-}
-
-model River {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  worldId        String   @db.ObjectId
   name           String
-  path           Json     // Array of coordinates
-  sourceRegionId String
-  mouthRegionId  String
-  regionId       String   @db.ObjectId
-  region         Region   @relation(fields: [regionId], references: [id])
+  parentRegionId String?  @db.ObjectId
+  geom           Json // { outer: RelRing, holes?: RelRing[] }
+  tags           String[]
+
+  @@index([worldId])
+  @@index([worldId, name])
 }
 
-model Feature {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  name      String
-  type      String
-  location  Json     // Coordinate
-  regionId  String   @db.ObjectId
-  region    Region   @relation(fields: [regionId], references: [id])
+/**
+ * ---------- Locations (point in rel coords) ----------
+ */
+model Location {
+  id       String  @id @default(auto()) @map("_id") @db.ObjectId
+  worldId  String  @db.ObjectId
+  name     String
+  regionId String? @db.ObjectId
+  coordRel Json // { u, v } in [0,1]
+  props    Json?
+
+  @@index([worldId])
+  @@index([worldId, regionId])
+  @@index([name])
+}
+
+/**
+ * ---------- Entities ----------
+ */
+model Entity {
+  id         String     @id @default(auto()) @map("_id") @db.ObjectId
+  worldId    String     @db.ObjectId
+  type       EntityType
+  name       String
+  locationId String?    @db.ObjectId
+  regionId   String?    @db.ObjectId
+  coordRel   Json? // fallback if no locationId
+  attributes Json?
+  tags       String[]
+
+  @@index([worldId, type])
+  @@index([worldId, locationId])
+  @@index([name])
+}
+
+/**
+ * ---------- Relationships ----------
+ */
+model Relationship {
+  id           String           @id @default(auto()) @map("_id") @db.ObjectId
+  worldId      String           @db.ObjectId
+  fromEntityId String           @db.ObjectId
+  toEntityId   String           @db.ObjectId
+  type         RelationshipType
+  weight       Float?
+  constraints  Json?
+  validity     Json?
+  props        Json?
+
+  @@index([worldId, fromEntityId, type])
+  @@index([worldId, toEntityId, type])
+  @@index([worldId, type])
+}
+
+/**
+ * ---------- Movement Graph ----------
+ */
+model MovementEdge {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  worldId        String       @db.ObjectId
+  fromLocationId String       @db.ObjectId
+  toLocationId   String       @db.ObjectId
+  mode           MovementMode
+  pathRel        Json? // RelPath for preview
+  distanceUnits  Float?
+  difficulty     Float?
+  props          Json?
+
+  @@index([worldId, fromLocationId])
+  @@index([worldId, toLocationId])
+}
+
+/**
+ * ---------- Event Templates ----------
+ */
+model EventTemplate {
+  id            String        @id @default(auto()) @map("_id") @db.ObjectId
+  worldId       String        @db.ObjectId
+  category      EventCategory
+  name          String
+  preconditions Json?
+  effects       Json?
+  parameters    Json?
+  weight        Float?
+  cooldown      Json?
+
+  @@index([worldId, category])
+}
+
+/**
+ * ---------- Triggers ----------
+ */
+model Trigger {
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  worldId    String @db.ObjectId
+  type       String // onMove | onTime | ...
+  selector   Json?
+  templateId String @db.ObjectId
+  throttle   Json?
+
+  @@index([worldId, type])
+}
+
+/**
+ * ---------- Events (instances) ----------
+ */
+model Event {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  worldId        String   @db.ObjectId
+  campaignId     String   @db.ObjectId
+  time           DateTime
+  order          Int
+  type           String
+  templateId     String?  @db.ObjectId
+  actors         String[] @db.ObjectId
+  fromLocationId String?  @db.ObjectId
+  toLocationId   String?  @db.ObjectId
+  fromRel        Json?
+  toRel          Json?
+  pathRel        Json?
+  metrics        Json?
+  stateDiff      Json?
+  cause          Json?
+
+  @@index([worldId, campaignId, order])
+  @@index([worldId, time])
+}
+
+/**
+ * ---------- Campaigns ----------
+ */
+model Campaign {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  worldId       String         @db.ObjectId
+  name          String
+  startEntityId String         @db.ObjectId
+  endEntityId   String         @db.ObjectId
+  goal          Json
+  constraints   Json?
+  status        CampaignStatus
+  createdAt     DateTime
+
+  @@index([worldId, status])
+  @@index([worldId, startEntityId])
+  @@index([worldId, endEntityId])
+}
+
+/**
+ * ---------- Campaign State ----------
+ */
+model CampaignState {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  worldId         String   @db.ObjectId
+  campaignId      String   @unique @db.ObjectId
+  entityLocations Json // { [entityId]: locationId | {u,v} }
+  counters        Json?
+  flags           Json?
+  lastEventOrder  Int
+  updatedAt       DateTime
+
+  @@index([worldId, campaignId])
 }

@@ -3,8 +3,14 @@ import { ZodProvider } from '@autoform/zod';
 import { AutoForm } from '../ui/autoform';
 import { useApiMutation } from '@/hooks/useApiQuery';
 import { World, WorldFormSchema } from '@talespin/schema';
+import { useQueryClient } from '@tanstack/react-query';
 
-function WorldFormComponent() {
+interface WorldFormComponentProps {
+  onSuccess?: () => void;
+}
+
+function WorldFormComponent({ onSuccess }: WorldFormComponentProps) {
+  const queryClient = useQueryClient();
   const schemaProvider = new ZodProvider(WorldFormSchema);
 
   const createWorld = useApiMutation<World, Partial<World>>(
@@ -13,8 +19,8 @@ function WorldFormComponent() {
     undefined,
     {
       onSuccess: (newWorld) => {
-        // Optionally, you can refetch or update cache here
-        // e.g., queryClient.invalidateQueries(['/api/worlds']);
+        queryClient.invalidateQueries({ queryKey: ['/api/worlds'] });
+        onSuccess?.();
       },
     },
   );
@@ -22,7 +28,9 @@ function WorldFormComponent() {
     createWorld.mutate(data);
   };
 
-  return <AutoForm schema={schemaProvider} onSubmit={handleSubmit} />;
+  return (
+    <AutoForm schema={schemaProvider} onSubmit={handleSubmit} withSubmit />
+  );
 }
 
 export default WorldFormComponent;

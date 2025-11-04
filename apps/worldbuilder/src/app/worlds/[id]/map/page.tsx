@@ -1,27 +1,11 @@
 'use client';
 import React, { useState } from 'react';
 import { EntityLayout } from '@/components/entity-layout';
-import { useApiMutation, useApiQuery } from '@/hooks/useApiQuery';
-import {
-  World,
-  WorldMap,
-  WorldMapFormSchema,
-  RegionForm,
-} from '@talespin/schema';
+import { useApiQuery } from '@/hooks/useApiQuery';
+import { World, RegionForm } from '@talespin/schema';
 import { CopilotTextarea } from '@copilotkit/react-textarea';
-import { useForm, useFormContext, useWatch } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
-import { RegionList } from './RegionList';
-import MapEditor from '@/components/map-editor.tsx';
+import MapEditor from '@/components/map-editor';
 
 export default function LocationsPage({
   params,
@@ -35,15 +19,6 @@ export default function LocationsPage({
   const [isCreatingRegion, setIsCreatingRegion] = useState(false);
   const [activatePolygonTool, setActivatePolygonTool] = useState(false);
   const [currentRegion, setCurrentRegion] = useState<RegionForm | null>(null);
-
-  const form = useForm({
-    resolver: zodResolver(WorldMapFormSchema),
-    defaultValues: {
-      worldId: id,
-      description: '',
-      regions: [],
-    },
-  });
 
   // Handler for when "Add Region" is clicked
   const handleAddRegion = () => {
@@ -59,7 +34,7 @@ export default function LocationsPage({
   // Handler for when a region polygon is created on the map
   const handleRegionCreated = (boundary: [number, number][]) => {
     const newRegion: RegionForm = {
-      name: `Region ${(form.getValues('regions')?.length || 0) + 1}`,
+      name: `Region ${Date.now()}`,
       boundary,
       terrain: '',
       climate: '',
@@ -93,84 +68,45 @@ export default function LocationsPage({
   // );
 
   return (
-    <Form {...form}>
-      <form
-        onSubmit={form.handleSubmit((values) => {
-          // createMap.mutate({
-          //   ...values,
-          //   regions: values.regions?.map((region: any) => ({
-          //     id: region.id ?? crypto.randomUUID(),
-          //     ...region,
-          //   })),
-          // });
-          // form.reset();
-        })}
-        className="space-y-4"
-      >
-        <EntityLayout
-          header={`Map of the World: ${id}`}
-          subheader="List and manage locations for this world here."
-          left={
-            <MapEditor
-              imageUrl={'/map.png'}
-              onRegionCreated={handleRegionCreated}
-              onPolygonToolActivated={handlePolygonToolActivated}
-              activatePolygonTool={activatePolygonTool}
-            />
-          }
-        >
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Description</FormLabel>
-                <FormControl>
-                  <CopilotTextarea
-                    autosuggestionsConfig={{
-                      textareaPurpose: `Describe the world map's high-level features like the type of world based on the world thme being ${world?.theme}`,
-                      chatApiConfigs: {
-                        suggestionsApiConfig: {
-                          maxTokens: 100,
-                        },
-                      },
-                    }}
-                    {...field}
-                    rows={3}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="regions"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Regions</FormLabel>
-                <FormControl>
-                  <RegionList
-                    regions={field.value}
-                    onRegionUpdated={() => {
-                      console.log('Region updated');
-                    }}
-                    onAddRegion={handleAddRegion}
-                    isCreatingRegion={isCreatingRegion}
-                    onCancelCreate={handleCancelCreate}
-                    onConfirmCreate={handleConfirmRegion}
-                    currentRegion={currentRegion}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <Button type="submit" disabled={false}>
-            Save Map
-          </Button>
-        </EntityLayout>
-      </form>
-    </Form>
+    <EntityLayout
+      header={`Map of the World: ${id}`}
+      subheader="List and manage locations for this world here."
+      left={
+        <MapEditor
+          imageUrl={world?.mapImageUrl || ''}
+          onRegionCreated={handleRegionCreated}
+          onPolygonToolActivated={handlePolygonToolActivated}
+          activatePolygonTool={activatePolygonTool}
+        />
+      }
+    >
+      <CopilotTextarea
+        defaultValue={world?.description}
+        autosuggestionsConfig={{
+          textareaPurpose: `Describe the world map's high-level features like the type of world based on the world thme being ${world?.theme}`,
+          chatApiConfigs: {
+            suggestionsApiConfig: {
+              maxTokens: 100,
+            },
+          },
+        }}
+        rows={3}
+      />
+      {/* <RegionList
+        regions={world?.regions}
+        onRegionUpdated={() => {
+          console.log('Region updated');
+        }}
+        onAddRegion={handleAddRegion}
+        isCreatingRegion={isCreatingRegion}
+        onCancelCreate={handleCancelCreate}
+        onConfirmCreate={handleConfirmRegion}
+        currentRegion={currentRegion}
+      /> */}
+
+      <Button type="submit" disabled={false}>
+        Save Map
+      </Button>
+    </EntityLayout>
   );
 }

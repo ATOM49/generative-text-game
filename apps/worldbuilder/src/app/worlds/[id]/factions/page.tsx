@@ -1,11 +1,10 @@
-import React from 'react';
 import { EntityLayout } from '@/components/entity-layout';
 
-export default function LocationsPage({ params }: { params: { id: string } }) {
+export default function SpeciesPage() {
   return (
     <EntityLayout
-      header={`Locations in World: ${params.id}`}
-      subheader="List and manage locations for this world here."
+      header="Species"
+      subheader="This is the species page for the selected world."
     >
       <div />
     </EntityLayout>

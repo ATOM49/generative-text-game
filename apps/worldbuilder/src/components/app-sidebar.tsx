@@ -29,11 +29,10 @@ export function AppSidebar() {
   const path = usePathname() || '';
 
   const tabs = [
-    { slug: 'map', label: 'World Map', icon: Globe },
-    { slug: 'factions', label: 'Factions & Cultures', icon: Users },
-    { slug: 'species', label: 'Species & Entities', icon: Dog },
-    { slug: 'rules', label: 'Global Rules', icon: Settings },
-    { slug: 'narrative', label: 'Narrative', icon: Scroll },
+    { slug: 'map', label: 'Map', icon: Globe },
+    { slug: 'factions', label: 'Factions', icon: Dog },
+    { slug: 'rules', label: 'Rules', icon: Settings },
+    // { slug: 'narrative', label: 'Narrative', icon: Scroll },
   ];
   const worldId = useMemo(() => path.split('/')[2], [path]);
 
