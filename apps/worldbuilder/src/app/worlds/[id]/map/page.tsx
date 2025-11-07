@@ -1,11 +1,24 @@
 'use client';
 import React, { useState } from 'react';
-import { EntityLayout } from '@/components/entity-layout';
 import { useApiQuery } from '@/hooks/useApiQuery';
-import { World, RegionForm } from '@talespin/schema';
-import { CopilotTextarea } from '@copilotkit/react-textarea';
-import { Button } from '@/components/ui/button';
+import { World, RegionForm, LocationForm } from '@talespin/schema';
 import MapEditor from '@/components/map-editor';
+import { Spinner } from '@/components/ui/spinner';
+import { withHeader } from '@/components/withHeader';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarProvider,
+} from '@/components/ui/sidebar';
+import RegionFormComponent from '@/components/form/region';
+import LocationFormComponent from '@/components/form/location';
+
+// Create a wrapped version of MapEditor with header
+const MapEditorWithHeader = withHeader(MapEditor);
 
 export default function LocationsPage({
   params,
@@ -16,97 +29,99 @@ export default function LocationsPage({
   const { data: world, isLoading } = useApiQuery<World>(`/api/worlds/${id}`);
 
   // State for region creation workflow
-  const [isCreatingRegion, setIsCreatingRegion] = useState(false);
-  const [activatePolygonTool, setActivatePolygonTool] = useState(false);
-  const [currentRegion, setCurrentRegion] = useState<RegionForm | null>(null);
-
-  // Handler for when "Add Region" is clicked
-  const handleAddRegion = () => {
-    setIsCreatingRegion(true);
-    setActivatePolygonTool(true);
-  };
-
-  // Handler for when polygon tool is activated
-  const handlePolygonToolActivated = () => {
-    setActivatePolygonTool(false); // Reset the trigger
-  };
+  const [currentRegion, setCurrentRegion] =
+    useState<Partial<RegionForm> | null>(null);
+  const [currentLocation, setCurrentLocation] =
+    useState<Partial<LocationForm> | null>(null);
 
   // Handler for when a region polygon is created on the map
-  const handleRegionCreated = (boundary: [number, number][]) => {
-    const newRegion: RegionForm = {
+  const handleRegionCreated = (geom: { outer: { u: number; v: number }[] }) => {
+    const newRegion: Partial<RegionForm> = {
       name: `Region ${Date.now()}`,
-      boundary,
-      terrain: '',
-      climate: '',
+      geom,
     };
     setCurrentRegion(newRegion);
+    setCurrentLocation(null); // Clear location form
   };
 
-  // Handler for confirming the region
-  const handleConfirmRegion = () => {
-    // Region is already in the form, just clean up the creation state
+  // Handler for when a location is created on the map
+  const handleLocationCreated = (coordRel: { u: number; v: number }) => {
+    const newLocation: Partial<LocationForm> = {
+      name: `Location ${Date.now()}`,
+      coordRel,
+    };
+    setCurrentLocation(newLocation);
+    setCurrentRegion(null); // Clear region form
+  };
+
+  const handleRegionSuccess = () => {
     setCurrentRegion(null);
-    setIsCreatingRegion(false);
   };
 
-  // Handler for canceling region creation
-  const handleCancelCreate = () => {
-    setCurrentRegion(null);
-    setIsCreatingRegion(false);
-    setActivatePolygonTool(false);
+  const handleLocationSuccess = () => {
+    setCurrentLocation(null);
   };
 
-  // const createMap = useApiMutation<WorldMap, Partial<WorldMap>>(
-  //   'POST',
-  //   '/api/world_map',
-  //   undefined,
-  //   { onSuccess: () => form.reset() },
-  // );
+  if (isLoading && !world) {
+    return <Spinner />;
+  }
 
-  // const { data: worldMapImage } = useApiQuery<string>(
-  //   `/api/world_map?worldId=${id}`,
-  // );
+  // Only show sidebar when there's a region or location being created/edited
+  const showSidebar = currentRegion !== null || currentLocation !== null;
 
   return (
-    <EntityLayout
-      header={`Map of the World: ${id}`}
-      subheader="List and manage locations for this world here."
-      left={
-        <MapEditor
-          imageUrl={world?.mapImageUrl || ''}
-          onRegionCreated={handleRegionCreated}
-          onPolygonToolActivated={handlePolygonToolActivated}
-          activatePolygonTool={activatePolygonTool}
-        />
-      }
-    >
-      <CopilotTextarea
-        defaultValue={world?.description}
-        autosuggestionsConfig={{
-          textareaPurpose: `Describe the world map's high-level features like the type of world based on the world thme being ${world?.theme}`,
-          chatApiConfigs: {
-            suggestionsApiConfig: {
-              maxTokens: 100,
-            },
-          },
-        }}
-        rows={3}
-      />
-      {/* <RegionList
-        regions={world?.regions}
-        onRegionUpdated={() => {
-          console.log('Region updated');
-        }}
-        onAddRegion={handleAddRegion}
-        isCreatingRegion={isCreatingRegion}
-        onCancelCreate={handleCancelCreate}
-        onConfirmCreate={handleConfirmRegion}
-        currentRegion={currentRegion}
-      /> */}
-
-      <Button type="submit" disabled={false}>
-        Save Map
-      </Button>
-    </EntityLayout>
+    <SidebarProvider defaultOpen={showSidebar} open={showSidebar}>
+      <div className="flex w-full h-full">
+        <div className="flex-1 min-w-0">
+          <MapEditorWithHeader
+            header={isLoading ? 'Loading...' : `Map of ${world?.name || ''}`}
+            subheader="Create and manage regions and locations"
+            imageUrl={world?.mapImageUrl || ''}
+            onRegionCreated={handleRegionCreated}
+            onLocationCreated={handleLocationCreated}
+          />
+        </div>
+        {showSidebar && (
+          <Sidebar side="right" className="border-l" collapsible="none">
+            <SidebarHeader>
+              <h2 className="text-lg font-semibold">
+                {currentRegion ? 'New Region' : 'New Location'}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {currentRegion
+                  ? 'Configure the region details'
+                  : 'Configure the location details'}
+              </p>
+            </SidebarHeader>
+            <SidebarContent>
+              {currentRegion && (
+                <SidebarGroup>
+                  <SidebarGroupLabel>Region Details</SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <RegionFormComponent
+                      worldId={id}
+                      defaultValues={currentRegion}
+                      onSuccess={handleRegionSuccess}
+                    />
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              )}
+              {currentLocation && (
+                <SidebarGroup>
+                  <SidebarGroupLabel>Location Details</SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <LocationFormComponent
+                      worldId={id}
+                      defaultValues={currentLocation}
+                      onSuccess={handleLocationSuccess}
+                    />
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              )}
+            </SidebarContent>
+          </Sidebar>
+        )}
+      </div>
+    </SidebarProvider>
   );
 }

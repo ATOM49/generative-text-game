@@ -20,8 +20,20 @@ function buildQueryKey(
 // Helper to build URL with query params
 function buildUrl(path: string, params?: Record<string, any>): string {
   if (!params || Object.keys(params).length === 0) return path;
-  const search = new URLSearchParams(params).toString();
-  return `${path}?${search}`;
+
+  // Check if path is already a full URL
+  try {
+    const url = new URL(path);
+    // It's a full URL, add params to it
+    Object.entries(params).forEach(([key, value]) => {
+      url.searchParams.append(key, String(value));
+    });
+    return url.toString();
+  } catch {
+    // It's a relative path, build normally
+    const search = new URLSearchParams(params).toString();
+    return `${path}?${search}`;
+  }
 }
 
 // Generic GET hook

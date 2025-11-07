@@ -25,6 +25,7 @@
     "@radix-ui/react-switch": "^1.2.5",
     "@radix-ui/react-toggle": "^1.1.9",
     "@radix-ui/react-tooltip": "^1.2.7",
+    "@talespin/schema": "workspace:*",
     "@tanstack/react-query": "^4.40.1",
     "@tanstack/react-query-devtools": "^4.40.1",
     "autoprefixer": "^10.4.21",
@@ -44,7 +45,6 @@
     "react-resizable-panels": "^3.0.3",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
-    "@talespin/schema": "workspace:*",
     "zod": "^3.25.76"
   },
   "devDependencies": {

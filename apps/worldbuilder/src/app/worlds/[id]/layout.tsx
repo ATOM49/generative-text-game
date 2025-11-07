@@ -10,9 +10,9 @@ export default function WorldLayout({
     <SidebarProvider>
       <div className="flex w-full h-screen">
         <AppSidebar />
-        <div className="flex-1 w-full h-screen overflow-hidden">
-          <SidebarTrigger className="p-4" />
-          <main className="p-6 w-full">{children}</main>
+        <div className="flex-1 w-full h-screen overflow-hidden flex flex-col">
+          <SidebarTrigger className="p-4 flex-shrink-0" />
+          <main className="w-full min-h-0 h-full flex-1">{children}</main>
         </div>
       </div>
     </SidebarProvider>

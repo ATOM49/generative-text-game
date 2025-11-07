@@ -1,8 +1,14 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { WorldQueryParams } from './types';
 import { ApiError } from './errors';
-import type { World, WorldForm } from '@talespin/schema';
+import {
+  WorldFormSchema,
+  WorldSchema,
+  type World,
+  type WorldForm,
+} from '@talespin/schema';
 import { WorldQueryParamsSchema } from './types';
+import { ImageGenerationService } from './image-generation.service';
 
 type PrismaWorld = {
   id: string;
@@ -32,65 +38,6 @@ const worldSelect = {
 
 export class WorldService {
   constructor(private prisma: PrismaClient) {}
-
-  private async generateMapImageUrl(data: WorldForm): Promise<string | null> {
-    try {
-      const watcherApiUrl =
-        process.env.WATCHER_API_URL || 'http://localhost:3001';
-
-      // Validate input data matches the API schema
-      const requestBody = {
-        name: data.name,
-        description: data.description,
-        theme: data.theme,
-        contextWindowLimit: data.contextWindowLimit,
-      };
-
-      console.log('Generating map image with data:', requestBody);
-
-      const response = await fetch(`${watcherApiUrl}/generate/map`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(
-          `Failed to generate map image (${response.status}):`,
-          errorText,
-        );
-        return null;
-      }
-
-      // Validate response matches expected structure
-      const result = (await response.json()) as
-        | { imageUrl: string; revisedPrompt?: string }
-        | { error: string; details?: string };
-
-      if ('error' in result) {
-        console.error('Map generation error:', result.error, result.details);
-        return null;
-      }
-
-      if (!result.imageUrl) {
-        console.error('No imageUrl in response:', result);
-        return null;
-      }
-
-      console.log('Map image generated successfully:', result.imageUrl);
-      if (result.revisedPrompt) {
-        console.log('Revised prompt:', result.revisedPrompt);
-      }
-
-      return result.imageUrl;
-    } catch (error) {
-      console.error('Error generating map image:', error);
-      return null;
-    }
-  }
 
   async listWorlds(queryParams: WorldQueryParams) {
     const parsedParams = WorldQueryParamsSchema.parse(queryParams);
@@ -145,32 +92,79 @@ export class WorldService {
   }
 
   async createWorld(data: WorldForm): Promise<World> {
-    // Generate map image and create world in parallel
-    const [mapImageUrl, world] = await Promise.all([
-      this.generateMapImageUrl(data),
-      this.prisma.world.create({
+    let world: PrismaWorld | null = null;
+    let mapImageUrl: string | null = null;
+
+    try {
+      // Step 1: Create the world in the database first
+      world = (await this.prisma.world.create({
         data: {
           name: data.name,
           description: data.description || null,
           theme: data.theme || null,
           contextWindowLimit: data.contextWindowLimit || 1024,
           settings: data.settings || null,
+          mapImageUrl: null, // Will be updated later
         },
         select: worldSelect.select,
-      }),
-    ]);
+      })) as unknown as PrismaWorld;
 
-    // Update world with the generated map image URL if successfully generated
-    if (mapImageUrl) {
-      const updatedWorld = await this.prisma.world.update({
-        where: { id: world.id },
-        data: { mapImageUrl },
-        select: worldSelect.select,
-      });
-      return this.mapWorldToDto(updatedWorld as unknown as PrismaWorld);
+      console.log(`World created with ID: ${world.id}`);
+
+      // Step 2: Generate the map image (non-blocking, but we wait for it)
+      try {
+        mapImageUrl = await new ImageGenerationService().generateImageUrl(
+          '/generate/map',
+          data,
+          WorldFormSchema,
+        );
+      } catch (imageError) {
+        // Log the error but don't fail the world creation
+        console.error(
+          'Failed to generate map image, world created without image:',
+          imageError,
+        );
+      }
+
+      // Step 3: Update the world with the map image URL if generation succeeded
+      if (mapImageUrl && world) {
+        try {
+          world = (await this.prisma.world.update({
+            where: { id: world.id },
+            data: { mapImageUrl },
+            select: worldSelect.select,
+          })) as unknown as PrismaWorld;
+          console.log(`World ${world.id} updated with map image URL`);
+        } catch (updateError) {
+          // Log the error but return the world without the image
+          console.error(
+            'Failed to update world with map image URL:',
+            updateError,
+          );
+          // The world still exists, just without the image URL
+        }
+      }
+
+      return this.mapWorldToDto(world);
+    } catch (error) {
+      // If world creation failed, ensure we don't leave orphaned data
+      if (world?.id) {
+        try {
+          await this.prisma.world.delete({ where: { id: world.id } });
+          console.log(`Rolled back world creation for ID: ${world.id}`);
+        } catch (rollbackError) {
+          console.error('Failed to rollback world creation:', rollbackError);
+        }
+      }
+
+      // Re-throw the original error
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          throw new ApiError(409, 'World with this name already exists');
+        }
+      }
+      throw error;
     }
-
-    return this.mapWorldToDto(world as unknown as PrismaWorld);
   }
 
   async updateWorld(id: string, data: WorldForm): Promise<World> {

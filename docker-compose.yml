@@ -11,5 +11,46 @@ services:
       - --bind_ip_all
     volumes:
       - mongo_data:/data/db
+
+  # S3-compatible local object storage to act as your "local CDN"
+  minio:
+    image: minio/minio:latest
+    container_name: world-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - '9000:9000' # S3 API + static site hosting (bucket website)
+      - '9001:9001' # MinIO Console
+    volumes:
+      - cdn_data:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/ready']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-off init job to create a public-read bucket for images
+  minio-setup:
+    image: minio/mc:latest
+    container_name: world-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing local/images &&
+      mc version enable local/images &&
+      mc anonymous set download local/images &&
+      mc ilm rule add --id=keep-latest-100 --expire-days 0 --noncurrent-expire-days 30 local/images &&
+      mc admin trace -v local &
+      mc bucket website set local/images enable &&
+      echo 'MinIO bucket ready'
+      "
+    restart: 'no'
+
 volumes:
   mongo_data:
+  cdn_data:

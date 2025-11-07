@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { useApiQuery } from '@/hooks/useApiQuery';
 import WorldFormComponent from '@/components/form/world';
 import { PaginatedResponse } from '@/lib/api/types';
+import { withHeader } from '@/components/withHeader';
 
 export default function WorldsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -33,10 +34,8 @@ export default function WorldsPage() {
     setIsDialogOpen(false);
   };
 
-  return (
-    <main className="font-custom p-8">
-      <h1 className="text-2xl font-bold mb-4">Worlds</h1>
-      <p>Browse all available worlds here.</p>
+  const Content = () => (
+    <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 my-8">
         {isLoading ? (
           <div>Loading...</div>
@@ -69,6 +68,9 @@ export default function WorldsPage() {
           <WorldFormComponent onSuccess={handleWorldCreated} />
         </DialogContent>
       </Dialog>
-    </main>
+    </>
   );
+
+  const Page = withHeader(Content);
+  return <Page header="Worlds" subheader="Browse all available worlds here." />;
 }

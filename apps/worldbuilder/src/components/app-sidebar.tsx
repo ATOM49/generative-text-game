@@ -19,6 +19,9 @@ import {
   Scroll,
   Settings,
   ChevronLeftIcon,
+  WholeWordIcon,
+  GlobeIcon,
+  WandIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -37,18 +40,20 @@ export function AppSidebar() {
   const worldId = useMemo(() => path.split('/')[2], [path]);
 
   return (
-    <Sidebar>
+    <Sidebar collapsible="icon">
       <SidebarHeader className="flex items-center flex-row">
         <Button asChild variant="secondary" size="icon" className="size-8 mr-2">
           <Link href="/">
             <ChevronLeftIcon />
           </Link>
         </Button>
-        Worlds
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Build your world</SidebarGroupLabel>
+          <SidebarGroupLabel className="flex items-center gap-2 align-middle">
+            <WandIcon className="h-5 w-5" />
+            <span>Craft your world</span>
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {tabs.map(({ slug, label, icon: Icon }) => (

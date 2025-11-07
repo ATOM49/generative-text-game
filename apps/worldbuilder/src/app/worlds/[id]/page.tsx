@@ -1,5 +1,10 @@
 import { redirect } from 'next/navigation';
 
-export default function WorldRoot({ params }: { params: { id: string } }) {
-  redirect(`/worlds/${params.id}/map`);
+export default async function WorldRoot({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const { id } = await params;
+  redirect(`/worlds/${id}/map`);
 }

@@ -4,8 +4,10 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Canvas, Circle, Line, Point, Polygon, Image } from 'fabric';
 // Import correct event type
 import type { TPointerEventInfo } from 'fabric';
+import { Button } from '@/components/ui/button';
+import { MapPin, Square } from 'lucide-react';
 
-type Tool = 'select' | 'polygon' | 'line' | 'dot';
+type Tool = 'select' | 'polygon' | 'location';
 
 // Relative coordinate types (0-1 range)
 interface RelativePoint {
@@ -24,76 +26,119 @@ interface RelativeShape {
 async function loadBackgroundImage(
   fabricCanvas: Canvas,
   imageUrl: string,
-): Promise<void> {
+  maxWidth: number,
+  maxHeight: number,
+): Promise<{ width: number; height: number }> {
   console.log('[loadBackgroundImage] Loading from:', imageUrl);
 
-  // Use Fabric's Image.fromURL to load the image
-  const fabricImg = await Image.fromURL(imageUrl, {
-    crossOrigin: 'anonymous',
-  });
+  try {
+    // Create a promise that waits for the actual image to load
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
 
-  console.log('[loadBackgroundImage] Image loaded:', {
-    width: fabricImg.width,
-    height: fabricImg.height,
-  });
+    const imageLoadPromise = new Promise<HTMLImageElement>(
+      (resolve, reject) => {
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = imageUrl;
+      },
+    );
 
-  const canvasWidth = fabricCanvas.getWidth();
-  const canvasHeight = fabricCanvas.getHeight();
+    // Wait for the image to fully load
+    const loadedImg = await imageLoadPromise;
 
-  // Calculate scaling to fit canvas while maintaining aspect ratio
-  const imgWidth = fabricImg.width || 1;
-  const imgHeight = fabricImg.height || 1;
-  const imgAspectRatio = imgWidth / imgHeight;
-  const canvasAspectRatio = canvasWidth / canvasHeight;
+    console.log('[loadBackgroundImage] Native image loaded:', {
+      width: loadedImg.naturalWidth,
+      height: loadedImg.naturalHeight,
+    });
 
-  let scale;
-  if (imgAspectRatio > canvasAspectRatio) {
-    scale = canvasWidth / imgWidth;
-  } else {
-    scale = canvasHeight / imgHeight;
+    // Now create Fabric image from the loaded image element
+    const fabricImg = new Image(loadedImg);
+
+    console.log('[loadBackgroundImage] Fabric image created:', {
+      width: fabricImg.width,
+      height: fabricImg.height,
+    });
+
+    // Get image dimensions
+    const imgWidth = fabricImg.width || 1;
+    const imgHeight = fabricImg.height || 1;
+
+    // Calculate aspect ratio
+    const aspectRatio = imgWidth / imgHeight;
+
+    // Calculate scaled dimensions to fit within maxWidth and maxHeight
+    let canvasWidth = maxWidth;
+    let canvasHeight = maxHeight;
+
+    // Scale to fit height, then adjust width based on aspect ratio
+    canvasHeight = maxHeight;
+    canvasWidth = Math.floor(canvasHeight * aspectRatio);
+
+    // If width exceeds maxWidth, scale down based on width instead
+    if (canvasWidth > maxWidth) {
+      canvasWidth = maxWidth;
+      canvasHeight = Math.floor(canvasWidth / aspectRatio);
+    }
+
+    console.log('[loadBackgroundImage] Calculated canvas dimensions:', {
+      imgWidth,
+      imgHeight,
+      aspectRatio,
+      maxWidth,
+      maxHeight,
+      canvasWidth,
+      canvasHeight,
+    });
+
+    // Resize canvas to the calculated dimensions
+    fabricCanvas.setWidth(canvasWidth);
+    fabricCanvas.setHeight(canvasHeight);
+
+    // Calculate scale factor to fit image in canvas
+    const scale = canvasWidth / imgWidth;
+
+    console.log('[loadBackgroundImage] Scale factor:', scale);
+
+    // Set image properties with scaling
+    fabricImg.set({
+      selectable: false,
+      evented: false,
+      left: 0,
+      top: 0,
+      originX: 'left',
+      originY: 'top',
+      scaleX: scale,
+      scaleY: scale,
+    });
+
+    // Set as background
+    fabricCanvas.backgroundImage = fabricImg;
+    fabricCanvas.renderAll();
+
+    console.log('[loadBackgroundImage] Background set successfully');
+
+    return { width: canvasWidth, height: canvasHeight };
+  } catch (error) {
+    console.error('[loadBackgroundImage] Error loading image:', error);
+    throw error;
   }
-
-  // Set image properties
-  fabricImg.set({
-    scaleX: scale,
-    scaleY: scale,
-    left: 0,
-    top: 0,
-    selectable: false,
-    evented: false,
-  });
-
-  // Set as background using Fabric's property
-  fabricCanvas.backgroundImage = fabricImg;
-  fabricCanvas.renderAll();
-  console.log('[loadBackgroundImage] Background set successfully');
 }
 // --- end helper ---
 
 interface MapEditorProps {
   imageUrl: string;
-  onRegionCreated?: (boundary: [number, number][]) => void;
+  onRegionCreated?: (geom: { outer: { u: number; v: number }[] }) => void;
+  onLocationCreated?: (coordRel: { u: number; v: number }) => void;
   onPolygonToolActivated?: () => void;
   activeRegionId?: string | null;
   activatePolygonTool?: boolean;
 }
 
-// Helper to convert external URLs to proxied URLs
-function getProxiedImageUrl(imageUrl: string): string {
-  // Check if it's an external URL that needs proxying
-  if (
-    imageUrl.includes('oaidalleapiprodscus.blob.core.windows.net') ||
-    imageUrl.includes('dalleprodsec.blob.core.windows.net') ||
-    imageUrl.includes('cdn.openai.com')
-  ) {
-    return `/api/images/proxy?url=${encodeURIComponent(imageUrl)}`;
-  }
-  return imageUrl;
-}
-
 export default function MapEditor({
   imageUrl,
   onRegionCreated,
+  onLocationCreated,
   onPolygonToolActivated,
   activeRegionId,
   activatePolygonTool = false,
@@ -103,10 +148,12 @@ export default function MapEditor({
   const [tool, setTool] = useState<Tool>('select');
   const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
   const [polygonPoints, setPolygonPoints] = useState<Point[]>([]);
+  const [imageLoadError, setImageLoadError] = useState<string | null>(null);
 
   // Store shapes with relative coordinates
   const [shapes, setShapes] = useState<RelativeShape[]>([]);
   const canvasSizeRef = useRef({ width: 0, height: 0 });
+  const isLoadingImageRef = useRef(false);
 
   // Effect to activate polygon tool when requested
   useEffect(() => {
@@ -150,7 +197,9 @@ export default function MapEditor({
   );
 
   // Function to redraw all shapes from relative coordinates
-  const redrawShapes = useCallback(() => {
+  const redrawShapesRef = useRef<() => void>(() => {});
+
+  redrawShapesRef.current = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -199,7 +248,11 @@ export default function MapEditor({
     });
 
     canvas.renderAll();
-  }, [shapes, toAbsolute]);
+  };
+
+  const redrawShapes = useCallback(() => {
+    redrawShapesRef.current?.();
+  }, []);
 
   // Initialize canvas
   useEffect(() => {
@@ -208,61 +261,59 @@ export default function MapEditor({
     const canvasEl = document.createElement('canvas');
     wrapperRef.current.appendChild(canvasEl);
 
-    // Get initial dimensions
-    const width = wrapperRef.current.clientWidth;
-    const height = wrapperRef.current.clientHeight;
+    // Get the parent container dimensions to constrain the canvas
+    const parent = wrapperRef.current.parentElement;
+    const maxWidth = parent?.clientWidth || 800;
+    const maxHeight = parent?.clientHeight || 600;
+
+    console.log('[MapEditor] Initializing canvas with constraints:', {
+      maxWidth,
+      maxHeight,
+    });
 
     const fabricCanvas = new Canvas(canvasEl, {
-      width,
-      height,
+      width: 100, // Temporary size, will be updated when image loads
+      height: 100,
       selection: true,
       enableRetinaScaling: false,
       imageSmoothingEnabled: true,
+      backgroundColor: '#f0f0f0', // Light gray to show canvas bounds
+      renderOnAddRemove: true,
     });
 
     canvasRef.current = fabricCanvas;
-    canvasSizeRef.current = { width, height };
 
-    // Use proxied URL to avoid CORS issues
-    const proxiedImageUrl = getProxiedImageUrl(imageUrl);
-    console.log('[MapEditor] Initial load', { imageUrl, proxiedImageUrl });
-
-    // Load background image using simplified Fabric.js method
-    loadBackgroundImage(fabricCanvas, proxiedImageUrl).catch((error) => {
-      console.error('[MapEditor] Failed to load background image:', error);
+    console.log('[MapEditor] Initial load', {
+      imageUrl,
     });
 
-    // Add ResizeObserver to detect when the wrapper element resizes
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        const canvas = canvasRef.current;
-
-        if (
-          canvas &&
-          (width !== canvasSizeRef.current.width ||
-            height !== canvasSizeRef.current.height)
-        ) {
-          // Update canvas size
+    // Load the image and resize canvas to fit within constraints
+    const loadTimeout = setTimeout(() => {
+      isLoadingImageRef.current = true;
+      setImageLoadError(null);
+      loadBackgroundImage(fabricCanvas, imageUrl, maxWidth, maxHeight)
+        .then(({ width, height }) => {
+          console.log('[MapEditor] Canvas sized to image:', { width, height });
           canvasSizeRef.current = { width, height };
-          canvas.setWidth(width);
-          canvas.setHeight(height);
-
-          // Reload background image for the new canvas size
-          const proxiedImageUrl = getProxiedImageUrl(imageUrl);
-          loadBackgroundImage(canvas, proxiedImageUrl).catch(console.error);
-
-          // Redraw all shapes
+          // Redraw any existing shapes
           redrawShapes();
-        }
-      }
-    });
-
-    resizeObserver.observe(wrapperRef.current);
+        })
+        .catch((error) => {
+          console.error('[MapEditor] Failed to load background image:', error);
+          setImageLoadError(
+            'Failed to load map image. The image URL may have expired. Please regenerate the map.',
+          );
+        })
+        .finally(() => {
+          isLoadingImageRef.current = false;
+        });
+    }, 50);
 
     return () => {
-      resizeObserver.disconnect();
-      fabricCanvas.dispose();
+      clearTimeout(loadTimeout);
+      if (canvasRef.current) {
+        canvasRef.current.dispose();
+      }
     };
   }, [imageUrl, redrawShapes]);
 
@@ -271,10 +322,10 @@ export default function MapEditor({
 
   useEffect(() => {
     if (canvasRef.current && isImporting.current) {
-      redrawShapes();
+      redrawShapesRef.current?.();
       isImporting.current = false;
     }
-  }, [shapes, redrawShapes]);
+  }, [shapes]);
 
   // Drawing logic
   useEffect(() => {
@@ -285,7 +336,7 @@ export default function MapEditor({
       const pointer = opt.pointer || { x: 0, y: 0 };
       const relativePoint = toRelative(pointer);
 
-      if (tool === 'dot') {
+      if (tool === 'location') {
         const circle = new Circle({
           left: pointer.x,
           top: pointer.y,
@@ -303,35 +354,13 @@ export default function MapEditor({
         };
         setShapes((prev) => [...prev, newShape]);
         (circle as any).shapeId = newShape.id;
-      }
 
-      if (tool === 'line') {
-        const prev = (canvas as any).__lastLinePoint;
-        const prevRelative = (canvas as any).__lastLinePointRelative;
-
-        if (prev && prevRelative) {
-          const line = new Line([prev.x, prev.y, pointer.x, pointer.y], {
-            stroke: 'blue',
-            strokeWidth: 2,
-            selectable: false,
-          });
-          canvas.add(line);
-
-          // Store the shape with relative coordinates
-          const newShape: RelativeShape = {
-            id: crypto.randomUUID(),
-            type: 'line',
-            points: [prevRelative, relativePoint],
-          };
-          setShapes((prev) => [...prev, newShape]);
-          (line as any).shapeId = newShape.id;
-
-          delete (canvas as any).__lastLinePoint;
-          delete (canvas as any).__lastLinePointRelative;
-        } else {
-          (canvas as any).__lastLinePoint = pointer;
-          (canvas as any).__lastLinePointRelative = relativePoint;
+        // Call callback with location data
+        if (onLocationCreated) {
+          onLocationCreated({ u: relativePoint.x, v: relativePoint.y });
         }
+
+        setTool('select'); // Switch back to select tool after creating location
       }
 
       if (tool === 'polygon') {
@@ -365,13 +394,13 @@ export default function MapEditor({
         setShapes((prev) => [...prev, newShape]);
         (poly as any).shapeId = newShape.id;
 
-        // Convert relative points to boundary format and call callback
+        // Convert relative points to geom format and call callback
         if (onRegionCreated) {
-          const boundary: [number, number][] = relativePoints.map((point) => [
-            point.x,
-            point.y,
-          ]);
-          onRegionCreated(boundary);
+          const outer = relativePoints.map((point) => ({
+            u: point.x,
+            v: point.y,
+          }));
+          onRegionCreated({ outer });
         }
 
         setPolygonPoints([]);
@@ -388,7 +417,7 @@ export default function MapEditor({
       canvas.off('mouse:down', handleClick);
       canvas.off('mouse:dblclick', handleDoubleClick);
     };
-  }, [tool, polygonPoints, toRelative]); // Add dependencies
+  }, [tool, polygonPoints, toRelative, onRegionCreated, onLocationCreated]); // Add dependencies
 
   // Add functions to save/load shape data
   const exportShapes = useCallback(() => {
@@ -416,60 +445,46 @@ export default function MapEditor({
   }, [exportShapes, importShapes, shapes]);
 
   return (
-    <div className="w-full h-screen relative">
+    <div className="w-full h-full relative overflow-auto bg-gray-100">
+      {imageLoadError && (
+        <div className="absolute top-20 left-4 right-4 z-20 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          <strong className="font-bold">Error: </strong>
+          <span className="block sm:inline">{imageLoadError}</span>
+        </div>
+      )}
       <div className="absolute top-4 left-4 z-10 bg-white rounded shadow-md p-2 space-x-2 flex flex-wrap items-center">
-        {(['select', 'polygon', 'line', 'dot'] as Tool[]).map((t) => (
-          <button
-            key={t}
-            className={`px-2 py-1 rounded ${tool === t ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-            onClick={() => {
-              setTool(t);
-              if (t !== 'polygon') setPolygonPoints([]);
-            }}
-          >
-            {t}
-          </button>
-        ))}
-        <button
-          className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
+        <Button
+          variant={tool === 'polygon' ? 'default' : 'outline'}
+          size="sm"
           onClick={() => {
-            setShapes([]);
+            setTool('polygon');
             setPolygonPoints([]);
-            setIsDrawingPolygon(false);
-            // Clear shapes from canvas
-            const canvas = canvasRef.current;
-            if (canvas) {
-              const objects = canvas
-                .getObjects()
-                .filter((obj) => (obj as any).shapeId);
-              objects.forEach((obj) => canvas.remove(obj));
-              canvas.renderAll();
-            }
           }}
         >
-          Clear
-        </button>
-        <button
-          className="px-2 py-1 rounded bg-green-500 text-white hover:bg-green-600"
+          <Square className="mr-2 h-4 w-4" />
+          Add Region
+        </Button>
+        <Button
+          variant={tool === 'location' ? 'default' : 'outline'}
+          size="sm"
           onClick={() => {
-            const data = exportShapes();
-            navigator.clipboard.writeText(data);
-            alert('Shape data copied to clipboard!');
+            setTool('location');
+            setPolygonPoints([]);
           }}
         >
-          Export
-        </button>
-        <button
-          className="px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600"
+          <MapPin className="mr-2 h-4 w-4" />
+          Add Location
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => {
-            const data = prompt('Paste shape data:');
-            if (data) {
-              importShapes(data);
-            }
+            setTool('select');
+            setPolygonPoints([]);
           }}
         >
-          Import
-        </button>
+          Select
+        </Button>
         {tool === 'polygon' && isDrawingPolygon && (
           <span className="ml-2 text-sm text-gray-700">
             Double click to finish polygon
@@ -480,11 +495,16 @@ export default function MapEditor({
             Click to start drawing region boundary
           </span>
         )}
-        <div className="text-xs text-gray-600 ml-2">
-          Shapes: {shapes.length}
-        </div>
+        {tool === 'location' && (
+          <span className="ml-2 text-sm text-blue-700 font-medium">
+            Click on the map to place a location
+          </span>
+        )}
       </div>
-      <div ref={wrapperRef} className="w-full h-full" />
+      <div
+        ref={wrapperRef}
+        className="w-full h-full flex items-center justify-center"
+      />
     </div>
   );
 }
