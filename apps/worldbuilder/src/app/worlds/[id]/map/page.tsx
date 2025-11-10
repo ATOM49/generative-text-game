@@ -4,7 +4,6 @@ import { useApiQuery } from '@/hooks/useApiQuery';
 import { World, RegionForm, LocationForm } from '@talespin/schema';
 import MapEditor from '@/components/map-editor';
 import { Spinner } from '@/components/ui/spinner';
-import { withHeader } from '@/components/withHeader';
 import {
   Sidebar,
   SidebarContent,
@@ -12,13 +11,11 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
-  SidebarProvider,
+  SidebarInset,
+  SidebarTrigger,
 } from '@/components/ui/sidebar';
 import RegionFormComponent from '@/components/form/region';
 import LocationFormComponent from '@/components/form/location';
-
-// Create a wrapped version of MapEditor with header
-const MapEditorWithHeader = withHeader(MapEditor);
 
 export default function LocationsPage({
   params,
@@ -66,62 +63,76 @@ export default function LocationsPage({
     return <Spinner />;
   }
 
-  // Only show sidebar when there's a region or location being created/edited
-  const showSidebar = currentRegion !== null || currentLocation !== null;
+  // Only show right sidebar when there's a region or location being created/edited
+  const showRightSidebar = currentRegion !== null || currentLocation !== null;
 
   return (
-    <SidebarProvider defaultOpen={showSidebar} open={showSidebar}>
-      <div className="flex w-full h-full">
-        <div className="flex-1 min-w-0">
-          <MapEditorWithHeader
-            header={isLoading ? 'Loading...' : `Map of ${world?.name || ''}`}
-            subheader="Create and manage regions and locations"
+    <>
+      <SidebarInset className="flex flex-col">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+          <SidebarTrigger className="-ml-1" />
+          <div className="flex-1">
+            <h1 className="text-lg font-semibold">
+              {isLoading ? 'Loading...' : `Map of ${world?.name || ''}`}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Create and manage regions and locations
+            </p>
+          </div>
+        </header>
+        <div className="flex-1 overflow-auto">
+          <MapEditor
             imageUrl={world?.mapImageUrl || ''}
             onRegionCreated={handleRegionCreated}
             onLocationCreated={handleLocationCreated}
           />
         </div>
-        {showSidebar && (
-          <Sidebar side="right" className="border-l" collapsible="none">
-            <SidebarHeader>
-              <h2 className="text-lg font-semibold">
-                {currentRegion ? 'New Region' : 'New Location'}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {currentRegion
-                  ? 'Configure the region details'
-                  : 'Configure the location details'}
-              </p>
-            </SidebarHeader>
-            <SidebarContent>
-              {currentRegion && (
-                <SidebarGroup>
-                  <SidebarGroupLabel>Region Details</SidebarGroupLabel>
-                  <SidebarGroupContent>
-                    <RegionFormComponent
-                      worldId={id}
-                      defaultValues={currentRegion}
-                      onSuccess={handleRegionSuccess}
-                    />
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              )}
-              {currentLocation && (
-                <SidebarGroup>
-                  <SidebarGroupLabel>Location Details</SidebarGroupLabel>
-                  <SidebarGroupContent>
-                    <LocationFormComponent
-                      worldId={id}
-                      defaultValues={currentLocation}
-                      onSuccess={handleLocationSuccess}
-                    />
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              )}
-            </SidebarContent>
-          </Sidebar>
-        )}
-      </div>
-    </SidebarProvider>
+      </SidebarInset>
+      {showRightSidebar && (
+        <Sidebar
+          side="right"
+          variant="sidebar"
+          collapsible="none"
+          className="border-l"
+        >
+          <SidebarHeader>
+            <h2 className="text-lg font-semibold">
+              {currentRegion ? 'New Region' : 'New Location'}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {currentRegion
+                ? 'Configure the region details'
+                : 'Configure the location details'}
+            </p>
+          </SidebarHeader>
+          <SidebarContent>
+            {currentRegion && (
+              <SidebarGroup>
+                <SidebarGroupLabel>Region Details</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <RegionFormComponent
+                    worldId={id}
+                    defaultValues={currentRegion}
+                    onSuccess={handleRegionSuccess}
+                  />
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+            {currentLocation && (
+              <SidebarGroup>
+                <SidebarGroupLabel>Location Details</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <LocationFormComponent
+                    worldId={id}
+                    defaultValues={currentLocation}
+                    onSuccess={handleLocationSuccess}
+                  />
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+          </SidebarContent>
+        </Sidebar>
+      )}
+    </>
   );
 }
