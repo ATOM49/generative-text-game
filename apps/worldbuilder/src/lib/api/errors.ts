@@ -6,6 +6,7 @@ export class ApiError extends Error {
   constructor(
     public statusCode: number,
     message: string,
+    public details?: unknown,
   ) {
     super(message);
   }
@@ -16,7 +17,9 @@ export function handleApiError(error: unknown) {
 
   if (error instanceof ApiError) {
     return NextResponse.json(
-      { error: error.message },
+      error.details
+        ? { error: error.message, details: error.details }
+        : { error: error.message },
       { status: error.statusCode },
     );
   }

@@ -3,7 +3,7 @@ import type { WorldQueryParams } from './types';
 import { ApiError } from './errors';
 import { WorldFormSchema, type World, type WorldForm } from '@talespin/schema';
 import { WorldQueryParamsSchema } from './types';
-import { ImageGenerationService } from './image-generation.service';
+import { ImageGenerationService } from './ai-image.service';
 
 type PrismaWorld = {
   id: string;

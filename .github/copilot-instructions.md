@@ -156,6 +156,8 @@ export async function POST(req: NextRequest) {
 }
 ```
 
+> **Always** wrap API route logic in a `try/catch` that delegates to `handleApiError(error)` so responses stay consistent (validation, Prisma, and custom `ApiError` instances all flow through the same formatter).
+
 ### 5. Service Layer Pattern (worldbuilder)
 
 Encapsulate business logic in service classes (see `apps/worldbuilder/src/lib/api/*.service.ts`):
