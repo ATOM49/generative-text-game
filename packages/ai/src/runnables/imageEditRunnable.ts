@@ -35,8 +35,12 @@ export class OpenAIImageEditRunnable extends Runnable<InArgs, OutArgs> {
   }
 
   async invoke(input: InArgs): Promise<OutArgs> {
-    const imageFile = await toFile(input.image, 'image.png');
-    const maskFile = await toFile(input.mask, 'mask.png');
+    const imageFile = await toFile(input.image, 'image.png', {
+      type: 'image/png',
+    });
+    const maskFile = await toFile(input.mask, 'mask.png', {
+      type: 'image/png',
+    });
 
     const res = await this.client.images.edit({
       model: this.model,

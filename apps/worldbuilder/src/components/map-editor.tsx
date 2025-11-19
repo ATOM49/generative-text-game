@@ -5,7 +5,7 @@ import { Canvas, Circle, Line, Point, Polygon, Image } from 'fabric';
 // Import correct event type
 import type { TPointerEventInfo } from 'fabric';
 import { Button } from '@/components/ui/button';
-import { MapPin, Square } from 'lucide-react';
+import { Loader2, MapPin, Square } from 'lucide-react';
 
 type Tool = 'select' | 'polygon' | 'location';
 
@@ -20,6 +20,22 @@ interface RelativeShape {
   type: 'dot' | 'line' | 'polygon';
   points: RelativePoint[];
   style?: any;
+}
+
+interface EditImageSuccess {
+  imageUrl: string;
+  key: string;
+  meta: {
+    provider: string;
+    model: string;
+    size: string;
+    requestId?: string;
+  };
+}
+
+interface EditImageError {
+  error: string;
+  details?: string;
 }
 
 // --- Background image helper ---
@@ -131,6 +147,7 @@ interface MapEditorProps {
   onRegionCreated?: (geom: { outer: { u: number; v: number }[] }) => void;
   onLocationCreated?: (coordRel: { u: number; v: number }) => void;
   onPolygonToolActivated?: () => void;
+  onImageEdited?: (imageUrl: string) => void;
   activeRegionId?: string | null;
   activatePolygonTool?: boolean;
 }
@@ -140,6 +157,7 @@ export default function MapEditor({
   onRegionCreated,
   onLocationCreated,
   onPolygonToolActivated,
+  onImageEdited,
   activeRegionId,
   activatePolygonTool = false,
 }: MapEditorProps) {
@@ -149,6 +167,9 @@ export default function MapEditor({
   const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
   const [polygonPoints, setPolygonPoints] = useState<Point[]>([]);
   const [imageLoadError, setImageLoadError] = useState<string | null>(null);
+  const [currentImageUrl, setCurrentImageUrl] = useState(imageUrl);
+  const [isEditingImage, setIsEditingImage] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Store shapes with relative coordinates
   const [shapes, setShapes] = useState<RelativeShape[]>([]);
@@ -164,6 +185,10 @@ export default function MapEditor({
       }
     }
   }, [activatePolygonTool, onPolygonToolActivated]);
+
+  useEffect(() => {
+    setCurrentImageUrl(imageUrl);
+  }, [imageUrl]);
 
   //   const { control } = useFormContext();
 
@@ -257,6 +282,12 @@ export default function MapEditor({
   // Initialize canvas
   useEffect(() => {
     if (!wrapperRef.current) return;
+    if (!currentImageUrl) {
+      setImageLoadError(
+        'No map image available. Generate a map to begin editing.',
+      );
+      return;
+    }
 
     const canvasEl = document.createElement('canvas');
     wrapperRef.current.appendChild(canvasEl);
@@ -284,14 +315,14 @@ export default function MapEditor({
     canvasRef.current = fabricCanvas;
 
     console.log('[MapEditor] Initial load', {
-      imageUrl,
+      imageUrl: currentImageUrl,
     });
 
     // Load the image and resize canvas to fit within constraints
     const loadTimeout = setTimeout(() => {
       isLoadingImageRef.current = true;
       setImageLoadError(null);
-      loadBackgroundImage(fabricCanvas, imageUrl, maxWidth, maxHeight)
+      loadBackgroundImage(fabricCanvas, currentImageUrl, maxWidth, maxHeight)
         .then(({ width, height }) => {
           console.log('[MapEditor] Canvas sized to image:', { width, height });
           canvasSizeRef.current = { width, height };
@@ -315,7 +346,7 @@ export default function MapEditor({
         canvasRef.current.dispose();
       }
     };
-  }, [imageUrl, redrawShapes]);
+  }, [currentImageUrl, redrawShapes]);
 
   // Handle redrawing only when importing shapes
   const isImporting = useRef(false);
@@ -326,6 +357,61 @@ export default function MapEditor({
       isImporting.current = false;
     }
   }, [shapes]);
+
+  const handleImageEdit = useCallback(
+    async (relativePoints: RelativePoint[]) => {
+      if (!currentImageUrl || relativePoints.length < 3) {
+        return;
+      }
+
+      setIsEditingImage(true);
+      setEditError(null);
+
+      try {
+        const response = await fetch('/api/images/edit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imageUrl: currentImageUrl,
+            polygon: { points: relativePoints },
+          }),
+        });
+
+        const payload = (await response.json().catch(() => null)) as
+          | EditImageSuccess
+          | EditImageError
+          | null;
+
+        if (!payload) {
+          throw new Error('Image edit request returned an empty response.');
+        }
+
+        if (!response.ok || !('imageUrl' in payload)) {
+          const message =
+            (payload as EditImageError)?.details ||
+            (payload as EditImageError)?.error ||
+            'Image edit request failed.';
+          throw new Error(message);
+        }
+
+        setCurrentImageUrl(payload.imageUrl);
+        setEditError(null);
+        if (onImageEdited) {
+          onImageEdited(payload.imageUrl);
+        }
+      } catch (error) {
+        console.error('[MapEditor] Failed to edit map image', error);
+        setEditError(
+          error instanceof Error ? error.message : 'Failed to edit map image.',
+        );
+      } finally {
+        setIsEditingImage(false);
+      }
+    },
+    [currentImageUrl, onImageEdited],
+  );
 
   // Drawing logic
   useEffect(() => {
@@ -402,6 +488,7 @@ export default function MapEditor({
           }));
           onRegionCreated({ outer });
         }
+        void handleImageEdit(relativePoints);
 
         setPolygonPoints([]);
         setIsDrawingPolygon(false);
@@ -417,7 +504,14 @@ export default function MapEditor({
       canvas.off('mouse:down', handleClick);
       canvas.off('mouse:dblclick', handleDoubleClick);
     };
-  }, [tool, polygonPoints, toRelative, onRegionCreated, onLocationCreated]); // Add dependencies
+  }, [
+    tool,
+    polygonPoints,
+    toRelative,
+    onRegionCreated,
+    onLocationCreated,
+    handleImageEdit,
+  ]); // Add dependencies
 
   // Add functions to save/load shape data
   const exportShapes = useCallback(() => {
@@ -452,53 +546,64 @@ export default function MapEditor({
           <span className="block sm:inline">{imageLoadError}</span>
         </div>
       )}
-      <div className="absolute top-4 left-4 z-10 bg-white rounded shadow-md p-2 space-x-2 flex flex-wrap items-center">
-        <Button
-          variant={tool === 'polygon' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => {
-            setTool('polygon');
-            setPolygonPoints([]);
-          }}
-        >
-          <Square className="mr-2 h-4 w-4" />
-          Add Region
-        </Button>
-        <Button
-          variant={tool === 'location' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => {
-            setTool('location');
-            setPolygonPoints([]);
-          }}
-        >
-          <MapPin className="mr-2 h-4 w-4" />
-          Add Location
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setTool('select');
-            setPolygonPoints([]);
-          }}
-        >
-          Select
-        </Button>
+      <div className="absolute top-4 left-4 z-10 bg-white rounded shadow-md p-3 space-y-2 min-w-[260px]">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={tool === 'polygon' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              setTool('polygon');
+              setPolygonPoints([]);
+            }}
+          >
+            <Square className="mr-2 h-4 w-4" />
+            Add Region
+          </Button>
+          <Button
+            variant={tool === 'location' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              setTool('location');
+              setPolygonPoints([]);
+            }}
+          >
+            <MapPin className="mr-2 h-4 w-4" />
+            Add Location
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setTool('select');
+              setPolygonPoints([]);
+            }}
+          >
+            Select
+          </Button>
+        </div>
         {tool === 'polygon' && isDrawingPolygon && (
-          <span className="ml-2 text-sm text-gray-700">
+          <span className="text-sm text-gray-700">
             Double click to finish polygon
           </span>
         )}
         {tool === 'polygon' && !isDrawingPolygon && (
-          <span className="ml-2 text-sm text-blue-700 font-medium">
+          <span className="text-sm text-blue-700 font-medium">
             Click to start drawing region boundary
           </span>
         )}
         {tool === 'location' && (
-          <span className="ml-2 text-sm text-blue-700 font-medium">
+          <span className="text-sm text-blue-700 font-medium">
             Click on the map to place a location
           </span>
+        )}
+        {isEditingImage && (
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Applying edit to highlighted region...
+          </p>
+        )}
+        {editError && !isEditingImage && (
+          <p className="text-xs text-red-600">{editError}</p>
         )}
       </div>
       <div

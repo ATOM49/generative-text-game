@@ -14,11 +14,8 @@
  *
  * @module image-generation
  */
+import { File as NodeFile } from 'node:buffer';
 import fp from 'fastify-plugin';
-import {
-  OpenAIImageEditRunnable,
-  OpenAIImageGenerateRunnable,
-} from '@talespin/ai';
 import type { MinioClientInstance } from '@talespin/cdn';
 
 export type ImageGenOptions = {
@@ -53,6 +50,20 @@ declare module 'fastify' {
   }
 }
 
+type AIModule = typeof import('@talespin/ai');
+
+let aiModulePromise: Promise<AIModule> | undefined;
+
+const loadAiModule = () => {
+  aiModulePromise ??= import('@talespin/ai');
+  return aiModulePromise;
+};
+
+// Ensure File global exists for OpenAI SDKs that expect browser File objects
+if (typeof globalThis.File === 'undefined') {
+  (globalThis as typeof globalThis & { File: typeof NodeFile }).File = NodeFile;
+}
+
 export default fp<ImageGenOptions>(
   async (fastify, opts) => {
     if (!process.env.OPENAI_API_KEY) {
@@ -68,6 +79,9 @@ export default fp<ImageGenOptions>(
     }
 
     const cdnClient: MinioClientInstance = fastify.cdn;
+
+    const { OpenAIImageEditRunnable, OpenAIImageGenerateRunnable } =
+      await loadAiModule();
 
     // Initialize the image generate runnable
     const imageGenerateRunnable = new OpenAIImageGenerateRunnable({

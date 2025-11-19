@@ -3,7 +3,8 @@ import { buildInpaintMaskPNG } from '@talespin/cdn';
 
 interface EditImageRequestBody {
   prompt: string;
-  imageBase64: string;
+  imageBase64?: string;
+  imageUrl?: string;
   polygon: {
     points: { x: number; y: number }[];
   };
@@ -42,6 +43,7 @@ const editImage: FastifyPluginAsync = async (fastify) => {
           properties: {
             prompt: { type: 'string' },
             imageBase64: { type: 'string' },
+            imageUrl: { type: 'string' },
             polygon: {
               type: 'object',
               properties: {
@@ -64,7 +66,8 @@ const editImage: FastifyPluginAsync = async (fastify) => {
             featherPx: { type: 'number' },
             dilatePx: { type: 'number' },
           },
-          required: ['prompt', 'imageBase64', 'polygon'],
+          required: ['prompt', 'polygon'],
+          anyOf: [{ required: ['imageBase64'] }, { required: ['imageUrl'] }],
         },
         response: {
           200: {
@@ -111,6 +114,7 @@ const editImage: FastifyPluginAsync = async (fastify) => {
         const {
           prompt,
           imageBase64,
+          imageUrl,
           polygon,
           size,
           keyPrefix,
@@ -119,10 +123,17 @@ const editImage: FastifyPluginAsync = async (fastify) => {
         } = req.body;
 
         // Validate required fields
-        if (!prompt || !imageBase64 || !polygon) {
+        if (!prompt || !polygon) {
           return reply.status(400).send({
             error: 'Missing required fields',
-            details: 'prompt, imageBase64, and polygon are required',
+            details: 'prompt and polygon are required',
+          });
+        }
+
+        if (!imageBase64 && !imageUrl) {
+          return reply.status(400).send({
+            error: 'Missing image data',
+            details: 'Provide either imageBase64 or imageUrl',
           });
         }
 
@@ -141,13 +152,58 @@ const editImage: FastifyPluginAsync = async (fastify) => {
           size: size || '1024x1024',
         });
 
-        // Convert base64 image to buffer
-        const imageBuffer = Buffer.from(imageBase64, 'base64');
-
-        fastify.log.debug({
-          msg: 'Converted base64 to buffer',
-          size: imageBuffer.length,
-        });
+        // Load source image
+        let imageBuffer: Buffer;
+        if (imageBase64) {
+          imageBuffer = Buffer.from(imageBase64, 'base64');
+          fastify.log.debug({
+            msg: 'Converted base64 to buffer',
+            size: imageBuffer.length,
+          });
+        } else if (imageUrl) {
+          fastify.log.debug({
+            msg: 'Fetching source image URL',
+            imageUrl,
+          });
+          try {
+            const imageResponse = await fetch(imageUrl);
+            if (!imageResponse.ok) {
+              fastify.log.error({
+                msg: 'Failed to fetch source image',
+                status: imageResponse.status,
+                statusText: imageResponse.statusText,
+              });
+              return reply.status(502).send({
+                error: 'Failed to fetch source image',
+                details: `Unable to download image (${imageResponse.status})`,
+              });
+            }
+            const arrayBuffer = await imageResponse.arrayBuffer();
+            imageBuffer = Buffer.from(arrayBuffer);
+            fastify.log.debug({
+              msg: 'Fetched source image buffer',
+              size: imageBuffer.length,
+            });
+          } catch (fetchError) {
+            fastify.log.error({
+              msg: 'Error fetching source image',
+              error: fetchError,
+              imageUrl,
+            });
+            return reply.status(502).send({
+              error: 'Failed to fetch source image',
+              details:
+                fetchError instanceof Error
+                  ? fetchError.message
+                  : 'Unknown error',
+            });
+          }
+        } else {
+          return reply.status(400).send({
+            error: 'Missing image data',
+            details: 'Provide either imageBase64 or imageUrl',
+          });
+        }
 
         // Generate inpaint mask from polygon
         const maskBuffer = await buildInpaintMaskPNG({
