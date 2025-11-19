@@ -4,8 +4,10 @@ import { Id, RelPolygon } from './common';
 export const RegionBaseSchema = z.object({
   name: z.string(),
   parentRegionId: Id.nullish(),
+  description: z.string().optional(),
   geom: RelPolygon,
-  tags: z.array(z.string()).optional(),
+  tags: z.array(z.string()).default([]),
+  gridCellIds: z.array(Id).default([]),
 });
 
 export const RegionFormSchema = RegionBaseSchema;

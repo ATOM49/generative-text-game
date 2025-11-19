@@ -6,11 +6,10 @@ import { prisma } from '@/lib/prisma';
 
 const worldService = new WorldService(prisma);
 
-type Props = {
-  params: { id: string };
-};
-
-export async function GET(_req: NextRequest, { params }: Props) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     const { id } = await params;
     const world = await worldService.getWorld(id);
@@ -20,7 +19,10 @@ export async function GET(_req: NextRequest, { params }: Props) {
   }
 }
 
-export async function PUT(req: NextRequest, { params }: Props) {
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     const data = await req.json();
     const { id } = await params;
@@ -33,7 +35,10 @@ export async function PUT(req: NextRequest, { params }: Props) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: Props) {
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     const { id } = await params;
     await worldService.deleteWorld(id);

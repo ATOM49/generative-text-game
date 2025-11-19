@@ -1,17 +1,13 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { WorldQueryParams } from './types';
 import { ApiError } from './errors';
-import {
-  WorldFormSchema,
-  WorldSchema,
-  type World,
-  type WorldForm,
-} from '@talespin/schema';
+import { WorldFormSchema, type World, type WorldForm } from '@talespin/schema';
 import { WorldQueryParamsSchema } from './types';
 import { ImageGenerationService } from './image-generation.service';
 
 type PrismaWorld = {
   id: string;
+  version: number;
   name: string;
   description: string | null;
   theme: string | null;
@@ -211,6 +207,7 @@ export class WorldService {
   private mapWorldToDto(world: PrismaWorld): World {
     return {
       _id: world.id,
+      version: world.version,
       name: world.name,
       description: world.description || undefined,
       theme: world.theme as World['theme'],

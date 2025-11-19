@@ -1,0 +1,32 @@
+{
+  "name": "@talespin/cdn",
+  "version": "0.0.1",
+  "description": "CDN utilities for MinIO and image processing",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && vite build",
+    "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "minio": "^8.0.1",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "typescript": "~5.8.3",
+    "vite": "^6.0.7",
+    "vite-plugin-dts": "^4.4.1"
+  }
+}

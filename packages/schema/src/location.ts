@@ -4,7 +4,9 @@ import { Id, RelCoord } from './common';
 export const LocationBaseSchema = z.object({
   name: z.string(),
   regionId: Id.nullish(),
+  description: z.string().optional(),
   coordRel: RelCoord,
+  gridCellId: Id.optional(),
   props: z.record(z.any()).optional(),
 });
 

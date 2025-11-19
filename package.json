@@ -6,7 +6,12 @@
     "dev:world": "pnpm --filter @talespin/worldbuilder dev",
     "build:world": "pnpm --filter @talespin/worldbuilder build",
     "dev:watcher": "pnpm --filter @talespin/watcher dev",
+    "build:watcher": "pnpm --filter @talespin/watcher build:ts",
     "build:schema": "pnpm --filter @talespin/schema build",
+    "build:ai": "pnpm --filter @talespin/ai build",
+    "build:cdn": "pnpm --filter @talespin/cdn build",
+    "build": "pnpm build:schema && pnpm build:ai && pnpm build:cdn && pnpm build:world && pnpm build:watcher",
+    "clean": "rimraf packages/*/dist apps/*/dist apps/*/node_modules/.cache packages/*/node_modules/.cache",
     "lint": "eslint .",
     "format": "prettier --write .",
     "prepare": "husky"

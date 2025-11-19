@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-export const EntityType = z.enum(['character', 'faction', 'item', 'poi']);
+export const EntityType = z.enum([
+  'CHARACTER',
+  'FACTION',
+  'NPC',
+  'ITEM',
+  'QUEST',
+]);
 export const RelationshipType = z.enum([
   'ally',
   'enemy',
@@ -17,7 +23,7 @@ export const EventCategory = z.enum([
   'discovery',
   'system',
 ]);
-export const CampaignStatus = z.enum(['active', 'completed', 'failed']);
+export const CampaignStatus = z.enum(['ACTIVE', 'COMPLETED', 'FAILED']);
 export const TriggerType = z.enum([
   'onMove',
   'onTime',

@@ -121,6 +121,7 @@ export class RegionService {
   private mapRegionToDto(region: PrismaRegion): Region {
     return {
       _id: region.id,
+      gridCellIds: [],
       worldId: region.worldId,
       name: region.name,
       parentRegionId: region.parentRegionId || undefined,

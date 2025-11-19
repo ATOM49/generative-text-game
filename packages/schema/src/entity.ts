@@ -8,10 +8,8 @@ export const EntityBaseSchema = z.object({
   locationId: Id.optional(),
   regionId: Id.optional(),
   coordRel: RelCoord.optional(),
-  attributes: z
-    .record(z.union([z.number(), z.string(), z.boolean()]))
-    .optional(),
-  tags: z.array(z.string()).optional(),
+  attributes: z.record(z.any()).optional(),
+  tags: z.array(z.string()).default([]),
 });
 
 export const EntityFormSchema = EntityBaseSchema;

@@ -1,8 +1,28 @@
+/**
+ * Image Generation Plugin
+ *
+ * Provides AI-powered image generation and editing capabilities via OpenAI's DALL-E.
+ *
+ * Features:
+ * - generateMapToCdn: Generate new images from text prompts (DALL-E 3)
+ * - editImageToCdn: Edit existing images using inpainting masks (DALL-E 2)
+ *
+ * Dependencies:
+ * - @talespin/ai: OpenAIImageGenerateRunnable and OpenAIImageEditRunnable
+ * - @talespin/cdn: MinIO client for CDN uploads
+ * - cdn plugin must be registered before this plugin
+ *
+ * @module image-generation
+ */
 import fp from 'fastify-plugin';
-import { DallEAPIWrapper } from '@langchain/openai';
+import {
+  OpenAIImageEditRunnable,
+  OpenAIImageGenerateRunnable,
+} from '@talespin/ai';
+import type { MinioClientInstance } from '@talespin/cdn';
 
 export type ImageGenOptions = {
-  defaultSize?: '1024x1024' | '512x512' | '256x256';
+  defaultSize?: '1024x1024' | '1792x1024' | '1024x1792';
 };
 
 declare module 'fastify' {
@@ -11,56 +31,130 @@ declare module 'fastify' {
       generateMapToCdn: (args: {
         prompt: string;
         worldName: string;
-        size?: '1024x1024' | '512x512' | '256x256';
+        size?: '1024x1024' | '1792x1024' | '1024x1792';
       }) => Promise<{ url: string; key: string }>;
+      editImageToCdn: (args: {
+        prompt: string;
+        image: Buffer;
+        mask: Buffer;
+        keyPrefix?: string;
+        size?: '256x256' | '512x512' | '1024x1024';
+      }) => Promise<{
+        url: string;
+        key: string;
+        meta: {
+          provider: string;
+          model: string;
+          size: string;
+          requestId?: string;
+        };
+      }>;
     };
   }
 }
 
-export default fp<ImageGenOptions>(async (fastify, opts) => {
-  if (!process.env.OPENAI_API_KEY) {
-    fastify.log.error('OPENAI_API_KEY missing');
-    throw new Error('OPENAI_API_KEY not configured');
-  }
+export default fp<ImageGenOptions>(
+  async (fastify, opts) => {
+    if (!process.env.OPENAI_API_KEY) {
+      fastify.log.error('OPENAI_API_KEY missing');
+      throw new Error('OPENAI_API_KEY not configured');
+    }
 
-  const defaultSize = opts.defaultSize || '1024x1024';
+    const defaultSize = opts.defaultSize || '1024x1024';
 
-  fastify.decorate('imageGen', {
-    async generateMapToCdn({ prompt, worldName, size = defaultSize }) {
-      // 1) Initialize DALL-E wrapper
-      const tool = new DallEAPIWrapper({
-        openAIApiKey: process.env.OPENAI_API_KEY,
-        modelName: 'dall-e-3',
-        size,
-        n: 1,
-        responseFormat: 'b64_json',
-      });
+    // Wait for CDN plugin to be registered
+    if (!fastify.cdn) {
+      throw new Error('CDN plugin must be registered before image-generation');
+    }
 
-      // 2) Generate image and get base64 data
-      const b64Json = await tool.invoke(prompt);
+    const cdnClient: MinioClientInstance = fastify.cdn;
 
-      console.log({ b64Json });
+    // Initialize the image generate runnable
+    const imageGenerateRunnable = new OpenAIImageGenerateRunnable({
+      apiKey: process.env.OPENAI_API_KEY,
+      model: 'dall-e-3',
+    });
 
-      // 3) Convert base64 to buffer
-      const buffer = Buffer.from(b64Json, 'base64');
+    // Initialize the image edit runnable
+    const imageEditRunnable = new OpenAIImageEditRunnable({
+      apiKey: process.env.OPENAI_API_KEY,
+      model: 'dall-e-2',
+    });
 
-      console.log({ buffer });
+    fastify.decorate('imageGen', {
+      async generateMapToCdn({ prompt, worldName, size = defaultSize }) {
+        // 1) Generate image using the runnable
+        const result = await imageGenerateRunnable.invoke({
+          prompt,
+          size,
+        });
 
-      // 4) Upload via CDN plugin
-      const slug = worldName
-        .toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]/g, '');
-      console.log({ slug });
+        fastify.log.debug({
+          msg: 'Received image from DALL-E',
+          revisedPrompt: result.revisedPrompt,
+        });
 
-      const { key, url } = await fastify.cdn.uploadBuffer({
-        buffer,
-        keyPrefix: `maps/${slug}/`,
-        contentType: 'image/png',
-      });
+        const buffer = result.imageBuffer;
 
-      console.log({ key, url });
-      return { key, url };
-    },
-  });
-});
+        fastify.log.debug({ msg: 'Image buffer ready', size: buffer.length });
+
+        // 4) Upload via CDN client
+        const slug = worldName
+          .toLowerCase()
+          .replace(/\s+/g, '-')
+          .replace(/[^a-z0-9-]/g, '');
+
+        const { key, url } = await cdnClient.uploadBuffer({
+          buffer,
+          keyPrefix: `maps/${slug}/`,
+          contentType: 'image/png',
+        });
+
+        fastify.log.info({ msg: 'Uploaded to CDN', key, url });
+        return { key, url };
+      },
+
+      async editImageToCdn({
+        prompt,
+        image,
+        mask,
+        keyPrefix,
+        size = '1024x1024',
+      }) {
+        fastify.log.debug({ msg: 'Starting image edit operation' });
+
+        // 1) Invoke the image edit runnable
+        const result = await imageEditRunnable.invoke({
+          prompt,
+          image,
+          mask,
+          size,
+        });
+
+        fastify.log.debug({
+          msg: 'Received edited image',
+          size: result.editedImageBuffer.length,
+        });
+
+        // 2) Upload edited image via CDN client
+        const { key, url } = await cdnClient.uploadBuffer({
+          buffer: result.editedImageBuffer,
+          keyPrefix: keyPrefix || 'edits/',
+          contentType: 'image/png',
+        });
+
+        fastify.log.info({ msg: 'Uploaded edited image to CDN', key, url });
+
+        return {
+          key,
+          url,
+          meta: result.providerMeta,
+        };
+      },
+    });
+  },
+  {
+    name: 'image-generation',
+    dependencies: ['cdn'],
+  },
+);

@@ -1,21 +1,19 @@
 {
-  "name": "@talespin/schema",
+  "name": "@talespin/ai",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.0.2",
+    "@langchain/openai": "^1.0.0",
+    "openai": "^6.8.0"
   },
   "devDependencies": {
     "vite": "^7.0.4",

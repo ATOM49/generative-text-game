@@ -28,41 +28,35 @@ enum RelationshipType {
   guards
 }
 
-enum MovementMode {
-  walk
-  horse
-  boat
-  fastTravel
+enum TreasureHuntRunStatus {
+  ACTIVE
+  SUCCESS
+  FAILED
 }
 
-enum EventCategory {
-  movement
-  combat
-  social
-  discovery
-  system
-}
-
-enum CampaignStatus {
-  active
-  completed
-  failed
+enum TreasureHuntEventType {
+  MOVE
+  EXPLORE
 }
 
 /**
  * ---------- Worlds ----------
  */
 model World {
-  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
-  name               String
-  description        String?
-  theme              String?
-  contextWindowLimit Int?
-  version            Int      @default(1)
-  mapImageUrl        String?
-  settings           Json?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                      String                   @id @default(auto()) @map("_id") @db.ObjectId
+  name                    String
+  description             String?
+  theme                   String?
+  contextWindowLimit      Int?
+  version                 Int                      @default(1)
+  mapImageUrl             String?
+  settings                Json?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  worldGrid               WorldGrid?
+  treasureHuntConfig      TreasureHuntConfig?
+  playerWorldExplorations PlayerWorldExploration[]
+  treasureHuntRuns        TreasureHuntRun[]
 
   @@index([name])
 }
@@ -75,8 +69,10 @@ model Region {
   worldId        String   @db.ObjectId
   name           String
   parentRegionId String?  @db.ObjectId
+  description    String?
   geom           Json // { outer: RelRing, holes?: RelRing[] }
   tags           String[]
+  gridCellIds    String[] @default([]) @db.ObjectId
 
   @@index([worldId])
   @@index([worldId, name])
@@ -90,11 +86,14 @@ model Location {
   worldId  String  @db.ObjectId
   name     String
   regionId String? @db.ObjectId
+  description String?
+  gridCellId  String? @db.ObjectId
   coordRel Json // { u, v } in [0,1]
   props    Json?
 
   @@index([worldId])
   @@index([worldId, regionId])
+  @@index([worldId, gridCellId])
   @@index([name])
 }
 
@@ -137,110 +136,132 @@ model Relationship {
 }
 
 /**
- * ---------- Movement Graph ----------
+ * ---------- Player ----------
  */
-model MovementEdge {
-  id             String       @id @default(auto()) @map("_id") @db.ObjectId
-  worldId        String       @db.ObjectId
-  fromLocationId String       @db.ObjectId
-  toLocationId   String       @db.ObjectId
-  mode           MovementMode
-  pathRel        Json? // RelPath for preview
-  distanceUnits  Float?
-  difficulty     Float?
-  props          Json?
+model Player {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@index([worldId, fromLocationId])
-  @@index([worldId, toLocationId])
+  explorations PlayerWorldExploration[]
+  runs         TreasureHuntRun[]
+  events       TreasureHuntEvent[]
+
+  @@index([name])
 }
 
-/**
- * ---------- Event Templates ----------
- */
-model EventTemplate {
-  id            String        @id @default(auto()) @map("_id") @db.ObjectId
-  worldId       String        @db.ObjectId
-  category      EventCategory
-  name          String
-  preconditions Json?
-  effects       Json?
-  parameters    Json?
-  weight        Float?
-  cooldown      Json?
+// --- grid / cells ---
 
-  @@index([worldId, category])
-}
-
-/**
- * ---------- Triggers ----------
- */
-model Trigger {
+model WorldGrid {
   id         String @id @default(auto()) @map("_id") @db.ObjectId
-  worldId    String @db.ObjectId
-  type       String // onMove | onTime | ...
-  selector   Json?
-  templateId String @db.ObjectId
-  throttle   Json?
+  worldId    String @unique @db.ObjectId
+  world      World  @relation(fields: [worldId], references: [id])
+  width      Int
+  height     Int
+  homeCellId String // references GridCell.id by convention (no hard FK)
 
-  @@index([worldId, type])
+  cells GridCell[]
+  hunts TreasureHuntRun[]
 }
 
-/**
- * ---------- Events (instances) ----------
- */
-model Event {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  worldId        String   @db.ObjectId
-  campaignId     String   @db.ObjectId
-  time           DateTime
-  order          Int
-  type           String
-  templateId     String?  @db.ObjectId
-  actors         String[] @db.ObjectId
-  fromLocationId String?  @db.ObjectId
-  toLocationId   String?  @db.ObjectId
-  fromRel        Json?
-  toRel          Json?
-  pathRel        Json?
-  metrics        Json?
-  stateDiff      Json?
-  cause          Json?
+model GridCell {
+  id     String    @id @default(auto()) @map("_id") @db.ObjectId
+  gridId String    @db.ObjectId
+  grid   WorldGrid @relation(fields: [gridId], references: [id])
 
-  @@index([worldId, campaignId, order])
-  @@index([worldId, time])
+  x        Int
+  y        Int
+  walkable Boolean
+  biome    String?
+  regionId String? @db.ObjectId // hook into Region if you want
+
+  @@index([gridId, x, y], name: "grid_xy_unique_idx")
 }
 
-/**
- * ---------- Campaigns ----------
- */
-model Campaign {
-  id            String         @id @default(auto()) @map("_id") @db.ObjectId
-  worldId       String         @db.ObjectId
-  name          String
-  startEntityId String         @db.ObjectId
-  endEntityId   String         @db.ObjectId
-  goal          Json
-  constraints   Json?
-  status        CampaignStatus
-  createdAt     DateTime
+// --- config per world ---
 
-  @@index([worldId, status])
-  @@index([worldId, startEntityId])
-  @@index([worldId, endEntityId])
+model TreasureHuntConfig {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  worldId String @unique @db.ObjectId
+  world   World  @relation(fields: [worldId], references: [id])
+
+  maxActionsPerRun           Int
+  minKeyDistance             Int
+  maxKeyDistance             Int
+  minTreasureDistanceFromKey Int
+  maxTreasureDistanceFromKey Int
 }
 
-/**
- * ---------- Campaign State ----------
- */
-model CampaignState {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  worldId         String   @db.ObjectId
-  campaignId      String   @unique @db.ObjectId
-  entityLocations Json // { [entityId]: locationId | {u,v} }
-  counters        Json?
-  flags           Json?
-  lastEventOrder  Int
-  updatedAt       DateTime
+// --- player exploration memory ---
 
-  @@index([worldId, campaignId])
+model PlayerWorldExploration {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  playerId String @db.ObjectId
+  worldId  String @db.ObjectId
+  player   Player @relation(fields: [playerId], references: [id])
+  world    World  @relation(fields: [worldId], references: [id])
+
+  exploredCellIds Json // array of CellId strings
+  totalRuns       Int  @default(0)
+  bestRunActions  Int?
+
+  @@unique([playerId, worldId])
+}
+
+// --- run state ---
+
+model TreasureHuntRun {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  worldId  String @db.ObjectId
+  gridId   String @db.ObjectId
+  playerId String @db.ObjectId
+
+  world  World     @relation(fields: [worldId], references: [id])
+  grid   WorldGrid @relation(fields: [gridId], references: [id])
+  player Player    @relation(fields: [playerId], references: [id])
+
+  runIndex  Int
+  status    TreasureHuntRunStatus
+  startedAt DateTime              @default(now())
+  endedAt   DateTime?
+
+  maxActions  Int
+  actionsUsed Int @default(0)
+
+  homeCellId     String
+  keyCellId      String
+  treasureCellId String
+
+  pathCellIds    Json // array of CellId strings
+  keyIndexInPath Int
+
+  revealedPathCellIds   Json // array of CellId strings
+  currentCellId         String
+  hasKey                Boolean @default(false)
+  keyFoundAtAction      Int?
+  treasureFoundAtAction Int?
+
+  events TreasureHuntEvent[]
+
+  @@index([playerId, worldId, runIndex])
+}
+
+// --- events ---
+
+model TreasureHuntEvent {
+  id        String                @id @default(auto()) @map("_id") @db.ObjectId
+  runId     String                @db.ObjectId
+  playerId  String                @db.ObjectId
+  type      TreasureHuntEventType
+  createdAt DateTime              @default(now())
+
+  run    TreasureHuntRun @relation(fields: [runId], references: [id])
+  player Player          @relation(fields: [playerId], references: [id])
+
+  // polymorphic payload, matches Zod discriminated union
+  payload Json
+
+  @@index([runId, createdAt])
 }
