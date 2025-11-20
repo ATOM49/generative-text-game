@@ -15,7 +15,7 @@ export const WorldBaseSchema = z.object({
     .optional(),
   version: z.number().int().default(1),
   mapImageUrl: z.string().url().optional(),
-  settings: z.record(z.any()).optional(),
+  settings: z.record(z.string(), z.any()).optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

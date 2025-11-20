@@ -8,7 +8,7 @@ export const EntityBaseSchema = z.object({
   locationId: Id.optional(),
   regionId: Id.optional(),
   coordRel: RelCoord.optional(),
-  attributes: z.record(z.any()).optional(),
+  attributes: z.record(z.string(), z.any()).optional(),
   tags: z.array(z.string()).default([]),
 });
 

@@ -12,6 +12,9 @@ export default defineConfig({
       fileName: 'index',
     },
     outDir: resolve(__dirname, 'dist'),
+    rollupOptions: {
+      external: ['zod'],
+    },
   },
   resolve: { alias: { src: resolve('src/') } },
   plugins: [dts()],

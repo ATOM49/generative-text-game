@@ -7,9 +7,9 @@ export const RelationshipBaseSchema = z.object({
   toEntityId: Id,
   type: RelationshipType,
   weight: z.number().optional(),
-  constraints: z.record(z.any()).optional(),
-  validity: z.record(z.any()).optional(),
-  props: z.record(z.any()).optional(),
+  constraints: z.record(z.string(), z.any()).optional(),
+  validity: z.record(z.string(), z.any()).optional(),
+  props: z.record(z.string(), z.any()).optional(),
 });
 
 export const RelationshipFormSchema = RelationshipBaseSchema;

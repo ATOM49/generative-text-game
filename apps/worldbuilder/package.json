@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@autoform/react": "^4.0.0",
-    "@autoform/zod": "^4.0.0",
+    "@autoform/zod": "^5.0.0",
     "@copilotkit/react-core": "^1.9.3",
     "@copilotkit/react-textarea": "^1.9.3",
     "@hookform/resolvers": "^5.1.1",
@@ -45,7 +45,7 @@
     "react-resizable-panels": "^3.0.3",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
-    "zod": "^3.25.76"
+    "zod": "4.1.12"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

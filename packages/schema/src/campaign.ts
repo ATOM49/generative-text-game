@@ -6,8 +6,8 @@ export const CampaignBaseSchema = z.object({
   name: z.string(),
   startEntityId: Id,
   endEntityId: Id,
-  goal: z.record(z.any()),
-  constraints: z.record(z.any()).optional(),
+  goal: z.record(z.string(), z.any()),
+  constraints: z.record(z.string(), z.any()).optional(),
   status: CampaignStatus,
 });
 

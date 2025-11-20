@@ -186,7 +186,7 @@ export class ImageGenerationService {
       return result.imageUrl;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        console.error('Validation error:', error.errors);
+        console.error('Validation error:', error.issues);
         return null;
       }
 

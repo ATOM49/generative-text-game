@@ -7,7 +7,7 @@ export const LocationBaseSchema = z.object({
   description: z.string().optional(),
   coordRel: RelCoord,
   gridCellId: Id.optional(),
-  props: z.record(z.any()).optional(),
+  props: z.record(z.string(), z.any()).optional(),
 });
 
 export const LocationFormSchema = LocationBaseSchema;

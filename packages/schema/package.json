@@ -17,6 +17,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
+  "dependencies": {
+    "zod": "4.1.12"
+  },
   "devDependencies": {
     "vite": "^7.0.4",
     "vite-plugin-dts": "^4.5.4"
