@@ -13,7 +13,7 @@
 ### Monorepo Structure
 
 - **pnpm workspace** with `apps/*` and `packages/*`
-- Node v18.19.1 + pnpm 10.13.1
+- Node v20.19.0+ + pnpm 10.13.1
 - Shared schemas ensure consistency between frontend forms and backend validation
 
 ### Data Flow
@@ -247,5 +247,6 @@ MINIO_SECRET_KEY="minioadmin"
 
 - **Frontend**: Next.js 15, React 19, TanStack Query v4, Radix UI, Tailwind CSS 4, Fabric.js (canvas)
 - **Backend**: Fastify 5, LangChain, OpenAI SDK 6.8
-- **Data**: Prisma 6, MongoDB 7, Zod 3
+- **Data**: Prisma 6.19 (MongoDB support), MongoDB 7, Zod 3
 - **Infrastructure**: Docker Compose, MinIO, pnpm workspaces
+- **Runtime**: Node.js 20.19.0+
