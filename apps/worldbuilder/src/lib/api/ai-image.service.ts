@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { RegionFormSchema } from '@talespin/schema';
 
 export interface ImageGenerationOptions {
   timeout?: number;
@@ -24,9 +23,10 @@ const PolygonSchema = z.object({
 
 const EditImageRequestSchema = z
   .object({
-    region: RegionFormSchema,
+    prompt: z.string().min(1),
     imageUrl: z.string().url().optional(),
     imageBase64: z.string().min(1).optional(),
+    polygon: PolygonSchema,
     size: z.enum(['256x256', '512x512', '1024x1024']).default('1024x1024'),
     keyPrefix: z.string().default('edits/'),
     featherPx: z.number().optional(),

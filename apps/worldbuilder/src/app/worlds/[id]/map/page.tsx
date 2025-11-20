@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { useApiQuery, useApiMutation } from '@/hooks/useApiQuery';
+import { useApiQuery } from '@/hooks/useApiQuery';
 import { World, RegionForm, LocationForm } from '@talespin/schema';
 import MapEditor from '@/components/map-editor';
 import { Spinner } from '@/components/ui/spinner';
@@ -31,22 +31,6 @@ export default function LocationsPage({
   const [currentLocation, setCurrentLocation] =
     useState<Partial<LocationForm> | null>(null);
 
-  // Mutation for editing image with region data
-  const editImageMutation = useApiMutation<
-    { imageUrl: string; key: string; meta: any },
-    { region: any; imageUrl: string }
-  >('POST', '/api/images/edit', undefined, {
-    onSuccess: (result) => {
-      console.log('Image edited successfully:', result.imageUrl);
-      // Clear form and state
-      setCurrentRegion(null);
-    },
-    onError: (error) => {
-      console.error('Failed to edit image:', error);
-      alert(error.message || 'Failed to edit image');
-    },
-  });
-
   // Handler for when a region polygon is created on the map
   const handleRegionCreated = (geom: { outer: { u: number; v: number }[] }) => {
     const newRegion: Partial<RegionForm> = {
@@ -65,19 +49,6 @@ export default function LocationsPage({
     };
     setCurrentLocation(newLocation);
     setCurrentRegion(null); // Clear region form
-  };
-
-  const handleRegionSubmit = (regionData: any) => {
-    if (!world?.mapImageUrl) {
-      console.error('Missing image URL');
-      return;
-    }
-
-    // Call the mutation with complete region data (polygon will be extracted from region.geom on server)
-    editImageMutation.mutate({
-      region: regionData,
-      imageUrl: world.mapImageUrl,
-    });
   };
 
   const handleRegionSuccess = () => {
@@ -143,8 +114,6 @@ export default function LocationsPage({
                     worldId={id}
                     defaultValues={currentRegion}
                     onSuccess={handleRegionSuccess}
-                    onSubmit={handleRegionSubmit}
-                    isSubmitting={editImageMutation.isPending}
                   />
                 </SidebarGroupContent>
               </SidebarGroup>

@@ -150,10 +150,6 @@ interface MapEditorProps {
   onImageEdited?: (imageUrl: string) => void;
   activeRegionId?: string | null;
   activatePolygonTool?: boolean;
-  onRegionSubmit?: (
-    region: any,
-    polygon: { points: RelativePoint[] },
-  ) => Promise<void>;
 }
 
 export default function MapEditor({
@@ -164,7 +160,6 @@ export default function MapEditor({
   onImageEdited,
   activeRegionId,
   activatePolygonTool = false,
-  onRegionSubmit,
 }: MapEditorProps) {
   const canvasRef = useRef<Canvas | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -175,9 +170,6 @@ export default function MapEditor({
   const [currentImageUrl, setCurrentImageUrl] = useState(imageUrl);
   const [isEditingImage, setIsEditingImage] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [pendingPolygon, setPendingPolygon] = useState<{
-    points: RelativePoint[];
-  } | null>(null);
 
   // Store shapes with relative coordinates
   const [shapes, setShapes] = useState<RelativeShape[]>([]);

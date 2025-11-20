@@ -9,16 +9,12 @@ interface RegionFormComponentProps {
   worldId: string;
   defaultValues?: Partial<Region>;
   onSuccess?: () => void;
-  onSubmit?: (data: any) => void;
-  isSubmitting?: boolean;
 }
 
 function RegionFormComponent({
   worldId,
   defaultValues,
   onSuccess,
-  onSubmit: customOnSubmit,
-  isSubmitting: externalIsSubmitting,
 }: RegionFormComponentProps) {
   const queryClient = useQueryClient();
   const schemaProvider = new ZodProvider(RegionFormSchema);
@@ -38,27 +34,16 @@ function RegionFormComponent({
   );
 
   const handleSubmit = (data: any) => {
-    if (customOnSubmit) {
-      customOnSubmit(data);
-    } else {
-      createRegion.mutate(data);
-    }
+    createRegion.mutate(data);
   };
 
-  const isSubmitting = externalIsSubmitting ?? createRegion.isPending;
-
   return (
-    <div>
-      <AutoForm
-        schema={schemaProvider}
-        onSubmit={handleSubmit}
-        values={defaultValues}
-        withSubmit
-      />
-      {isSubmitting && (
-        <p className="text-sm text-muted-foreground mt-2">Editing image...</p>
-      )}
-    </div>
+    <AutoForm
+      schema={schemaProvider}
+      onSubmit={handleSubmit}
+      values={defaultValues}
+      withSubmit
+    />
   );
 }
 
