@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "This project was bootstrapped with Fastify-CLI.",
   "main": "app.ts",
+  "type": "module",
   "scripts": {
     "test": "npm run build:ts && tsc -p test/tsconfig.json && c8 node --test -r ts-node/register \"test/**/*.ts\"",
     "start": "npm run build:ts && fastify start -l info -p 4000 dist/app.js",
@@ -27,7 +28,8 @@
     "fastify": "^5.0.0",
     "fastify-cli": "^7.4.0",
     "fastify-plugin": "^5.0.0",
-    "langchain": "^0.3.29"
+    "langchain": "^0.3.29",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/node": "^22.1.0",

@@ -1,13 +1,9 @@
 import { FastifyPluginAsync } from 'fastify';
-import { mapPromptTemplate } from '../../prompts/generate-map';
-
-interface WorldRequestBody {
-  name: string;
-  description?: string;
-  theme: string;
-  contextWindowLimit?: number;
-  settings?: string;
-}
+import { WorldFormSchema, type WorldForm } from '@talespin/schema';
+import {
+  mapPromptTemplate,
+  getThemeInstructions,
+} from '../../prompts/generate-map.js';
 
 interface GenerateMapResponse {
   imageUrl: string;
@@ -20,22 +16,12 @@ interface ErrorResponse {
 
 const generateMap: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
-    Body: WorldRequestBody;
+    Body: WorldForm;
     Reply: GenerateMapResponse | ErrorResponse;
   }>(
     '/',
     {
       schema: {
-        body: {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            description: { type: 'string' },
-            theme: { type: 'string' },
-            contextWindowLimit: { type: 'number' },
-          },
-          required: ['name', 'theme'],
-        },
         response: {
           200: {
             type: 'object',
@@ -68,15 +54,19 @@ const generateMap: FastifyPluginAsync = async (fastify) => {
       const startTime = Date.now();
 
       try {
-        const world = req.body;
+        // Validate request body against Zod schema
+        const parseResult = WorldFormSchema.safeParse(req.body);
 
-        // Validate required fields
-        if (!world.name || !world.theme) {
+        if (!parseResult.success) {
           return reply.status(400).send({
-            error: 'Missing required fields',
-            details: 'Both name and theme are required',
+            error: 'Invalid request body',
+            details: parseResult.error.errors
+              .map((e) => `${e.path.join('.')}: ${e.message}`)
+              .join(', '),
           });
         }
+
+        const world = parseResult.data;
 
         // Validate OpenAI API key
         if (!process.env.OPENAI_API_KEY) {
@@ -94,9 +84,12 @@ const generateMap: FastifyPluginAsync = async (fastify) => {
 
         const prompt = await mapPromptTemplate.format({
           name: world.name,
-          theme: world.theme,
+          theme: world.theme ?? 'fantasy',
           description: world.description ?? '–',
-          settings: world.settings ?? '–',
+          settings: world.settings ? JSON.stringify(world.settings) : '–',
+          themeSpecificInstructions: getThemeInstructions(
+            world.theme ?? 'fantasy',
+          ),
         });
 
         fastify.log.debug({

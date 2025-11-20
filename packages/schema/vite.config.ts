@@ -12,6 +12,7 @@ export default defineConfig({
       fileName: 'index',
     },
     outDir: resolve(__dirname, 'dist'),
+    minify: false,
   },
   resolve: { alias: { src: resolve('src/') } },
   plugins: [dts()],

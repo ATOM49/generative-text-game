@@ -1,8 +1,12 @@
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import AutoLoad, { AutoloadPluginOptions } from '@fastify/autoload';
 import { FastifyPluginAsync, FastifyServerOptions } from 'fastify';
-import type { CDNPluginOptions } from './plugins/cdn';
-import type { ImageGenOptions } from './plugins/image-generation';
+import type { CDNPluginOptions } from './plugins/cdn.js';
+import type { ImageGenOptions } from './plugins/image-generation.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export interface AppOptions
   extends FastifyServerOptions,

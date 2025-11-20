@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
-import map from './map';
-import editImage from './edit-image';
+import map from './map.js';
+import editImage from './edit-image.js';
 
 const generateRoutes: FastifyPluginAsync = async (fastify) => {
   // Register map generation route

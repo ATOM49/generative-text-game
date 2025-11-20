@@ -1,13 +1,11 @@
 import { FastifyPluginAsync } from 'fastify';
 import { buildInpaintMaskPNG } from '@talespin/cdn';
+import { RegionFormSchema, type RegionForm } from '@talespin/schema';
 
 interface EditImageRequestBody {
-  prompt: string;
+  region: RegionForm;
   imageBase64?: string;
   imageUrl?: string;
-  polygon: {
-    points: { x: number; y: number }[];
-  };
   size?: '256x256' | '512x512' | '1024x1024';
   keyPrefix?: string;
   featherPx?: number;
@@ -41,32 +39,15 @@ const editImage: FastifyPluginAsync = async (fastify) => {
         body: {
           type: 'object',
           properties: {
-            prompt: { type: 'string' },
+            region: { type: 'object' },
             imageBase64: { type: 'string' },
             imageUrl: { type: 'string' },
-            polygon: {
-              type: 'object',
-              properties: {
-                points: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      x: { type: 'number' },
-                      y: { type: 'number' },
-                    },
-                    required: ['x', 'y'],
-                  },
-                },
-              },
-              required: ['points'],
-            },
             size: { type: 'string', enum: ['256x256', '512x512', '1024x1024'] },
             keyPrefix: { type: 'string' },
             featherPx: { type: 'number' },
             dilatePx: { type: 'number' },
           },
-          required: ['prompt', 'polygon'],
+          required: ['region'],
           anyOf: [{ required: ['imageBase64'] }, { required: ['imageUrl'] }],
         },
         response: {
@@ -112,23 +93,27 @@ const editImage: FastifyPluginAsync = async (fastify) => {
 
       try {
         const {
-          prompt,
+          region: regionInput,
           imageBase64,
           imageUrl,
-          polygon,
           size,
           keyPrefix,
           featherPx,
           dilatePx,
         } = req.body;
 
-        // Validate required fields
-        if (!prompt || !polygon) {
+        // Validate region against Zod schema
+        const parseResult = RegionFormSchema.safeParse(regionInput);
+        if (!parseResult.success) {
           return reply.status(400).send({
-            error: 'Missing required fields',
-            details: 'prompt and polygon are required',
+            error: 'Invalid region data',
+            details: parseResult.error.errors
+              .map((e) => `${e.path.join('.')}: ${e.message}`)
+              .join(', '),
           });
         }
+
+        const region = parseResult.data;
 
         if (!imageBase64 && !imageUrl) {
           return reply.status(400).send({
@@ -148,9 +133,22 @@ const editImage: FastifyPluginAsync = async (fastify) => {
 
         fastify.log.info({
           msg: 'Starting image edit operation',
-          polygon,
+          region: { name: region.name, description: region.description },
           size: size || '1024x1024',
         });
+
+        // Build prompt from region data to maintain 8-bit style consistency
+        const regionDescription = region.description || region.name;
+        const tagsContext = region.tags?.length
+          ? ` Features: ${region.tags.join(', ')}.`
+          : '';
+        const prompt = `8-bit pixel-art style region depicting ${regionDescription}.${tagsContext} Maintain high-fidelity retro graphics with vibrant but limited palette, crisp pixel shapes, and clear detail. Top-down overhead perspective matching surrounding map style.`;
+
+        fastify.log.debug({
+          msg: 'Generated region edit prompt',
+          prompt,
+        });
+        console.log({ prompt });
 
         // Load source image
         let imageBuffer: Buffer;
@@ -204,6 +202,17 @@ const editImage: FastifyPluginAsync = async (fastify) => {
             details: 'Provide either imageBase64 or imageUrl',
           });
         }
+
+        // Convert region geometry to polygon format for mask generation
+        // Region uses RelPolygon format { outer: RelRing, holes?: RelRing[] }
+        // where RelRing is an array of { u, v } coordinates in [0,1] range
+        // buildInpaintMaskPNG expects { points: Array<{ x, y }> }
+        const polygon = {
+          points: region.geom.outer.map((coord) => ({
+            x: coord.u,
+            y: coord.v,
+          })),
+        };
 
         // Generate inpaint mask from polygon
         const maskBuffer = await buildInpaintMaskPNG({

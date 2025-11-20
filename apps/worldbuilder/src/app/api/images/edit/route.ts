@@ -4,9 +4,7 @@ import {
   type EditImageRequestInput,
 } from '@/lib/api/ai-image.service';
 import { ApiError, handleApiError } from '@/lib/api/errors';
-
-const EDIT_PROMPT =
-  'Enhance the selected region with richer topography, seamless blending, and story-driven landmarks consistent with the surrounding map style.';
+import { RegionFormSchema } from '@talespin/schema';
 
 const imageGenerationService = new ImageGenerationService();
 
@@ -27,9 +25,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Extract and validate region data
+    const { region, imageUrl } = body as Record<string, unknown>;
+
+    if (!region || typeof region !== 'object') {
+      throw new ApiError(400, 'Missing region data');
+    }
+
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      throw new ApiError(400, 'Missing imageUrl');
+    }
+
+    console.log({ region });
+    // Validate region against schema
+    const regionValidation = RegionFormSchema.safeParse(region);
+    if (!regionValidation.success) {
+      throw new ApiError(
+        400,
+        'Invalid region data',
+        regionValidation.error.errors,
+      );
+    }
+
+    const validatedRegion = regionValidation.data;
+
     const result = await imageGenerationService.editImageRegion({
-      ...(body as Record<string, unknown>),
-      prompt: EDIT_PROMPT,
+      region: validatedRegion,
+      imageUrl,
       size: '1024x1024',
       keyPrefix: 'world-edits/',
     } as EditImageRequestInput);
