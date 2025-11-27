@@ -34,6 +34,7 @@ export function AppSidebar() {
   const tabs = [
     { slug: 'map', label: 'Map', icon: Globe },
     { slug: 'factions', label: 'Factions', icon: Dog },
+    { slug: 'characters', label: 'Characters', icon: Users },
     { slug: 'rules', label: 'Rules', icon: Settings },
     // { slug: 'narrative', label: 'Narrative', icon: Scroll },
   ];

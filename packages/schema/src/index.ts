@@ -9,6 +9,8 @@ export * from './location';
 export * from './entity';
 export * from './relationship';
 export * from './campaign';
+export * from './faction';
+export * from './character';
 
 // Treasure Hunt Schemas
 export * from './player';

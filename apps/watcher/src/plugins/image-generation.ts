@@ -29,7 +29,13 @@ declare module 'fastify' {
         prompt: string;
         worldName: string;
         size?: '1024x1024' | '1792x1024' | '1024x1792';
-      }) => Promise<{ url: string; key: string }>;
+      }) => Promise<{ url: string; key: string; revisedPrompt?: string }>;
+      generatePortraitToCdn: (args: {
+        prompt: string;
+        characterName?: string;
+        keyPrefix?: string;
+        size?: '1024x1024' | '1792x1024' | '1024x1792';
+      }) => Promise<{ url: string; key: string; revisedPrompt?: string }>;
       editImageToCdn: (args: {
         prompt: string;
         image: Buffer;
@@ -125,7 +131,36 @@ export default fp<ImageGenOptions>(
         });
 
         fastify.log.info({ msg: 'Uploaded to CDN', key, url });
-        return { key, url };
+        return { key, url, revisedPrompt: result.revisedPrompt };
+      },
+
+      async generatePortraitToCdn({
+        prompt,
+        characterName,
+        keyPrefix,
+        size = defaultSize,
+      }) {
+        const result = await imageGenerateRunnable.invoke({
+          prompt,
+          size,
+        });
+
+        const buffer = result.imageBuffer;
+        const slugSource = characterName?.length ? characterName : 'character';
+        const slug = slugSource
+          .toLowerCase()
+          .replace(/\s+/g, '-')
+          .replace(/[^a-z0-9-]/g, '');
+
+        const { key, url } = await cdnClient.uploadBuffer({
+          buffer,
+          keyPrefix: keyPrefix || `characters/${slug}/`,
+          contentType: 'image/png',
+        });
+
+        fastify.log.info({ msg: 'Uploaded portrait to CDN', key, url });
+
+        return { key, url, revisedPrompt: result.revisedPrompt };
       },
 
       async editImageToCdn({

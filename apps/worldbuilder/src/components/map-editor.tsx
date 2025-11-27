@@ -161,6 +161,7 @@ export default function MapEditor({
   activeRegionId,
   activatePolygonTool = false,
 }: MapEditorProps) {
+  console.log({ imageUrl });
   const canvasRef = useRef<Canvas | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [tool, setTool] = useState<Tool>('select');

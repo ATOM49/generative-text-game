@@ -51,6 +51,41 @@ const EditImageResponseSchema = z.object({
 export type EditImageRequestInput = z.input<typeof EditImageRequestSchema>;
 export type EditImageResponse = z.infer<typeof EditImageResponseSchema>;
 
+const CharacterGroupSchema = z.object({
+  name: z.string().min(1),
+  summary: z.string().optional(),
+});
+
+export const CharacterImageRequestSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  biography: z.string().optional(),
+  factions: z.array(CharacterGroupSchema).default([]),
+  cultures: z.array(CharacterGroupSchema).default([]),
+  species: z.array(CharacterGroupSchema).default([]),
+  archetypes: z.array(CharacterGroupSchema).default([]),
+  traits: z.array(z.string()).default([]),
+  promptHint: z.string().optional(),
+});
+
+export type CharacterImageRequestInput = z.input<
+  typeof CharacterImageRequestSchema
+>;
+
+export const FactionImageRequestSchema = z.object({
+  name: z.string().min(1),
+  category: z.string().min(1),
+  summary: z.string().optional(),
+  description: z.string().optional(),
+  tone: z.string().optional(),
+  keywords: z.array(z.string()).default([]),
+  promptHint: z.string().optional(),
+});
+
+export type FactionImageRequestInput = z.input<
+  typeof FactionImageRequestSchema
+>;
+
 export type ServiceResult<T> =
   | { ok: true; data: T }
   | { ok: false; status: number; error: string; details?: unknown };

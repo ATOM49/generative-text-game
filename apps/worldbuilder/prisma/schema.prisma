@@ -39,6 +39,14 @@ enum TreasureHuntEventType {
   EXPLORE
 }
 
+enum FactionCategory {
+  faction
+  culture
+  species
+  entity
+  archetype
+}
+
 /**
  * ---------- Worlds ----------
  */
@@ -82,14 +90,14 @@ model Region {
  * ---------- Locations (point in rel coords) ----------
  */
 model Location {
-  id       String  @id @default(auto()) @map("_id") @db.ObjectId
-  worldId  String  @db.ObjectId
-  name     String
-  regionId String? @db.ObjectId
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  worldId     String  @db.ObjectId
+  name        String
+  regionId    String? @db.ObjectId
   description String?
   gridCellId  String? @db.ObjectId
-  coordRel Json // { u, v } in [0,1]
-  props    Json?
+  coordRel    Json // { u, v } in [0,1]
+  props       Json?
 
   @@index([worldId])
   @@index([worldId, regionId])
@@ -114,6 +122,43 @@ model Entity {
   @@index([worldId, type])
   @@index([worldId, locationId])
   @@index([name])
+}
+
+model Faction {
+  id          String          @id @default(auto()) @map("_id") @db.ObjectId
+  worldId     String          @db.ObjectId
+  name        String
+  summary     String?
+  description String?
+  previewUrl  String?
+  category    FactionCategory
+  meta        Json?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([worldId, category])
+  @@index([worldId, name])
+}
+
+model Character {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  worldId      String   @db.ObjectId
+  name         String
+  description  String?
+  biography    String?
+  previewUrl   String?
+  promptHint   String?
+  traits       String[] @default([])
+  factionIds   String[] @default([]) @db.ObjectId
+  cultureIds   String[] @default([]) @db.ObjectId
+  speciesIds   String[] @default([]) @db.ObjectId
+  archetypeIds String[] @default([]) @db.ObjectId
+  meta         Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([worldId])
+  @@index([worldId, name])
 }
 
 /**

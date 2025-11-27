@@ -3,23 +3,22 @@ import { PromptTemplate } from '@langchain/core/prompts';
 const mapPromptTemplate = PromptTemplate.fromTemplate(`
 Generate a **high-fidelity 8-bit style fantasy map** image from a **top-down perspective**.
 
-World Name: {name}
 Theme: {theme}
 Description: {description}
 Settings / Key Features: {settings}
+World Name (Context Only - DO NOT RENDER AS TEXT): {name}
 
 Instructions:
 - The map MUST be viewed from directly above (top-down/bird's-eye view), like a traditional RPG world map or strategic map layout.
 - The map should be rendered in 8-bit/bezel-retro pixel-art style, with vibrant but limited palette typical of classic console graphics.
-- Include clearly defined regions/territories with distinct boundaries that can be easily identified and separated.
-- Include terrain features (e.g., mountains, forests, rivers, lakes), distinct biomes, notable landmarks (e.g., ancient ruins, towers, cities) based on the "Settings / Key Features".
-- Each region should have visual distinction through color, terrain type, or border markings to make region definition clear.
-- Use the theme to evoke mood: {theme} → adjust color tone, iconography appropriately.
-- The world should feel coherent and immersive at a glance, while staying stylistically consistent with 8-bit high-fidelity (clear pixel-art, crisp shapes, readable detail).
+- CRITICAL: The image must be completely free of text. NO LABELS, NO LEGENDS, NO TITLE, NO UI.
+- Include clearly defined regions/territories with distinct boundaries.
+- Include terrain features (e.g., mountains, forests, rivers, lakes) and landmarks based on the settings.
+- Use the theme to evoke mood: {theme}.
 - Maintain a flat, overhead perspective throughout - no isometric or angled views.
-- Output should be described as an image generation prompt (for DALL·E or similar), ready for an image model.
+- The entire image should be filled with the map itself.
 
-Prompt: "Top-down 8-bit pixel-art world map of {name} – {theme} theme: {description}. Key features: {settings}. Overhead view with clearly defined regions and territories."
+Prompt: "A text-free, label-free 8-bit pixel-art world map. Top-down overhead view. Theme: {theme}. Terrain details: {description}. Key features: {settings}. The map shows only geography and terrain with distinct regions. Absolutely no text, no writing, no legends, and no interface elements."
 
 Please produce the final prompt for the image model.
 `);

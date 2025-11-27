@@ -15,10 +15,25 @@ export const WorldQueryParamsSchema = PaginationParamsSchema.extend({
   search: z.string().optional(),
 });
 
+export const FactionQueryParamsSchema = z.object({
+  category: z.string().optional(),
+  search: z.string().optional(),
+});
+
+export const CharacterQueryParamsSchema = z.object({
+  search: z.string().optional(),
+  factionId: z.string().optional(),
+  cultureId: z.string().optional(),
+  speciesId: z.string().optional(),
+  archetypeId: z.string().optional(),
+});
+
 export type SortOrder = z.infer<typeof SortOrder>;
 export type WorldSortBy = z.infer<typeof WorldSortBy>;
 export type PaginationParams = z.infer<typeof PaginationParamsSchema>;
 export type WorldQueryParams = z.infer<typeof WorldQueryParamsSchema>;
+export type FactionQueryParams = z.infer<typeof FactionQueryParamsSchema>;
+export type CharacterQueryParams = z.infer<typeof CharacterQueryParamsSchema>;
 
 export type PaginatedResponse<T> = {
   data: T[];

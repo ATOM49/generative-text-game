@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface WithHeaderProps {
-  header: string;
+  header: React.ReactNode;
   subheader?: string;
 }
 
@@ -16,7 +16,11 @@ export function withHeader<P extends object>(
     return (
       <div className="h-full w-full flex flex-col p-6">
         <div className="mb-4 flex-shrink-0">
-          <h1 className="text-2xl font-bold">{header}</h1>
+          {typeof header === 'string' ? (
+            <h1 className="text-2xl font-bold">{header}</h1>
+          ) : (
+            header
+          )}
           {subheader && (
             <h2 className="text-lg text-muted-foreground mb-2">{subheader}</h2>
           )}
