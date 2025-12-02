@@ -1,6 +1,6 @@
 'use client';
 import { ZodProvider } from '@autoform/zod';
-import { AutoForm, AutoFormSubmit } from '../ui/autoform';
+import { AutoForm } from '../ui/autoform';
 import { useApiMutation, useApiQuery } from '@/hooks/useApiQuery';
 import { Character, CharacterFormSchema, Faction } from '@talespin/schema';
 import { useQueryClient } from '@tanstack/react-query';
@@ -206,9 +206,9 @@ function CharacterFormComponent({
           selectedArchetypeIds,
           setSelectedArchetypeIds,
         )}
-        <AutoFormSubmit>
+        <Button type="submit" disabled={mutation.isLoading}>
           {characterId ? 'Update Character' : 'Create Character'}
-        </AutoFormSubmit>
+        </Button>
       </AutoForm>
     </div>
   );

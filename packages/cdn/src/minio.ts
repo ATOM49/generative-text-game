@@ -1,4 +1,5 @@
 import { Client as MinioClient } from 'minio';
+import type { BucketItem } from 'minio';
 import { randomUUID } from 'crypto';
 
 export type MinioClientOptions = {
@@ -12,10 +13,22 @@ export type UploadBufferArgs = {
   contentType?: string;
 };
 
+export type FindObjectByPrefixArgs = {
+  keyPrefix: string;
+  /**
+   * Whether to return the newest (latest) or oldest object within the prefix.
+   * Defaults to newest to maximize cache freshness.
+   */
+  select?: 'latest' | 'oldest';
+};
+
 export type MinioClientInstance = {
   uploadBuffer: (
     args: UploadBufferArgs,
   ) => Promise<{ key: string; url: string }>;
+  findObjectByPrefix: (
+    args: FindObjectByPrefixArgs,
+  ) => Promise<{ key: string; url: string } | null>;
   getPublicURL: (key: string) => string;
   bucket: string;
 };
@@ -75,8 +88,51 @@ export function createMinioClient(
     return { key, url: getPublicURL(key) };
   };
 
+  const findObjectByPrefix = async ({
+    keyPrefix,
+    select = 'latest',
+  }: FindObjectByPrefixArgs): Promise<{ key: string; url: string } | null> => {
+    return new Promise((resolve, reject) => {
+      const stream = client.listObjectsV2(bucket, keyPrefix, true);
+      let candidate: BucketItem | null = null;
+
+      stream.on('data', (item: BucketItem) => {
+        if (!item?.name) {
+          return;
+        }
+
+        if (!candidate) {
+          candidate = item;
+          return;
+        }
+
+        const candidateTime = candidate.lastModified?.getTime() ?? 0;
+        const currentTime = item.lastModified?.getTime() ?? 0;
+
+        if (select === 'latest' && currentTime > candidateTime) {
+          candidate = item;
+          return;
+        }
+
+        if (select === 'oldest' && currentTime < candidateTime) {
+          candidate = item;
+        }
+      });
+
+      stream.on('error', (error) => reject(error));
+      stream.on('end', () => {
+        if (candidate?.name) {
+          resolve({ key: candidate.name, url: getPublicURL(candidate.name) });
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  };
+
   return {
     uploadBuffer,
+    findObjectByPrefix,
     getPublicURL,
     bucket,
   };

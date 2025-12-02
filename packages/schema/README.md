@@ -132,8 +132,8 @@ packages/schema/
 │   ├── common.ts         # Shared types and utilities
 │   ├── enums.ts          # Common enumerations
 │   ├── world.ts          # World entity schemas
-│   ├── region.ts         # Region entity schemas
 │   ├── location.ts       # Location entity schemas
+│   ├── grid-cell.ts      # Grid cell schemas
 │   └── entities/         # Additional entity schemas
 ├── package.json
 └── vite.config.ts

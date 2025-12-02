@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { characterPromptTemplate } from '../../prompts/generate-character';
+import { characterPromptTemplate } from '../../prompts/generate-character.js';
 
 type CharacterGroup = {
   name: string;
@@ -180,9 +180,14 @@ const generateCharacter: FastifyPluginAsync = async (fastify) => {
         let revisedPrompt: string | undefined;
 
         try {
-          const result = await fastify.imageGen.generatePortraitToCdn({
+          const slug = name
+            .toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, '');
+
+          const result = await fastify.imageGen.generateImageToCdn({
             prompt,
-            characterName: name,
+            keyPrefix: `characters/${slug}/`,
           });
           imageUrl = result.url;
           revisedPrompt = result.revisedPrompt;

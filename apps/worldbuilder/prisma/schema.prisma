@@ -70,37 +70,18 @@ model World {
 }
 
 /**
- * ---------- Regions (polygon in rel coords) ----------
- */
-model Region {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  worldId        String   @db.ObjectId
-  name           String
-  parentRegionId String?  @db.ObjectId
-  description    String?
-  geom           Json // { outer: RelRing, holes?: RelRing[] }
-  tags           String[]
-  gridCellIds    String[] @default([]) @db.ObjectId
-
-  @@index([worldId])
-  @@index([worldId, name])
-}
-
-/**
  * ---------- Locations (point in rel coords) ----------
  */
 model Location {
   id          String  @id @default(auto()) @map("_id") @db.ObjectId
   worldId     String  @db.ObjectId
   name        String
-  regionId    String? @db.ObjectId
   description String?
   gridCellId  String? @db.ObjectId
   coordRel    Json // { u, v } in [0,1]
   props       Json?
 
   @@index([worldId])
-  @@index([worldId, regionId])
   @@index([worldId, gridCellId])
   @@index([name])
 }
@@ -114,13 +95,14 @@ model Entity {
   type       EntityType
   name       String
   locationId String?    @db.ObjectId
-  regionId   String?    @db.ObjectId
+  gridCellId String?    @db.ObjectId
   coordRel   Json? // fallback if no locationId
   attributes Json?
   tags       String[]
 
   @@index([worldId, type])
   @@index([worldId, locationId])
+  @@index([worldId, gridCellId])
   @@index([name])
 }
 
@@ -220,7 +202,9 @@ model GridCell {
   y        Int
   walkable Boolean
   biome    String?
-  regionId String? @db.ObjectId // hook into Region if you want
+  name        String?
+  description String?
+  tags        String[] @default([])
 
   @@index([gridId, x, y], name: "grid_xy_unique_idx")
 }

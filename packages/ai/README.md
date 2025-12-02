@@ -1,6 +1,6 @@
 # @talespin/ai
 
-AI utilities package for Talespin, providing LangChain runnables for image generation and editing operations.
+AI utilities package for Talespin, providing LangChain runnables for image generation, editing, and structured output operations.
 
 ## Installation
 
@@ -19,6 +19,87 @@ pnpm --filter @talespin/ai build
 ```
 
 ## Usage
+
+### OpenAIStructuredOutputRunnable
+
+A LangChain Runnable that generates structured data conforming to a Zod schema using OpenAI's native structured output support.
+
+```typescript
+import { OpenAIStructuredOutputRunnable } from '@talespin/ai';
+import { z } from 'zod';
+
+const runnable = new OpenAIStructuredOutputRunnable({
+  apiKey: process.env.OPENAI_API_KEY, // Optional, defaults to env var
+  model: 'gpt-4o-mini', // Optional, defaults to 'gpt-4o-mini'
+});
+
+const ProductSchema = z.object({
+  name: z.string().describe('Product name'),
+  price: z.number().min(0).describe('Price in USD'),
+  category: z.enum(['electronics', 'clothing', 'food']),
+  inStock: z.boolean(),
+});
+
+const result = await runnable.invoke({
+  prompt: 'Generate a product for a mechanical keyboard priced at $149',
+  schema: ProductSchema,
+  temperature: 0.7, // Optional, controls randomness (0-2)
+  maxRetries: 2, // Optional, retry attempts on errors
+});
+
+console.log(result.structuredResponse);
+// { name: "Mechanical Keyboard Pro", price: 149, category: "electronics", inStock: true }
+
+console.log(result.providerMeta);
+// { provider: 'openai', model: 'gpt-4o-mini' }
+```
+
+#### Using Talespin Schemas
+
+```typescript
+import { OpenAIStructuredOutputRunnable } from '@talespin/ai';
+import { WorldFormSchema, CharacterFormSchema } from '@talespin/schema';
+
+const runnable = new OpenAIStructuredOutputRunnable();
+
+// Generate a world
+const worldResult = await runnable.invoke({
+  prompt: 'Create a dark fantasy world with Gothic architecture',
+  schema: WorldFormSchema,
+});
+
+// Generate a character
+const characterResult = await runnable.invoke({
+  prompt: 'Create a mysterious rogue with stealth abilities',
+  schema: CharacterFormSchema,
+});
+```
+
+#### Input Types
+
+```typescript
+type InArgs<T> = {
+  prompt: string; // Natural language prompt describing desired output
+  schema: ZodSchema<T>; // Zod schema defining the structure
+  temperature?: number; // Randomness (0-2), default 0.7
+  maxRetries?: number; // Retry attempts on errors, default 2
+};
+```
+
+#### Output Types
+
+```typescript
+type OutArgs<T> = {
+  structuredResponse: T; // Generated data matching schema type
+  providerMeta: {
+    provider: 'openai';
+    model: string; // Model used for generation
+    promptTokens?: number; // Tokens in prompt
+    completionTokens?: number; // Tokens in completion
+    totalTokens?: number; // Total tokens used
+  };
+};
+```
 
 ### OpenAIImageEditRunnable
 
@@ -80,8 +161,31 @@ type OutArgs = {
 ## API Requirements
 
 - **OpenAI API Key**: Set `OPENAI_API_KEY` environment variable or pass via constructor
-- **Model**: Currently supports DALL-E 2 (`dall-e-2`) for image editing
+- **Models**:
+  - Structured Output: `gpt-4o-mini`, `gpt-4o`, `gpt-4-turbo` (supports native structured output)
+  - Image Editing: `dall-e-2`
+  - Image Generation: `dall-e-3`
 - **Image Format**: Supports PNG format with transparency for masks
+
+## Testing
+
+```bash
+# Run tests (requires OPENAI_API_KEY)
+pnpm --filter @talespin/ai test
+
+# Run tests in watch mode
+pnpm --filter @talespin/ai test:watch
+```
+
+The test suite includes examples using all Talespin schemas:
+
+- World generation with themes and context windows
+- Character generation with descriptors and faction relationships
+- Faction generation with character hooks and keywords
+- Location generation with relative coordinates
+- Custom schema validation
+- Error handling and retry logic
+- Temperature control effects
 
 ## Development
 
@@ -95,8 +199,11 @@ pnpm --filter @talespin/ai dev
 This package uses:
 
 - **LangChain Core**: Provides the `Runnable` base class for composable operations
-- **OpenAI SDK**: Handles communication with OpenAI's image APIs
+- **LangChain OpenAI**: Integration with OpenAI's chat models and structured output
+- **OpenAI SDK**: Handles communication with OpenAI's image and chat APIs
+- **Zod**: Schema validation for structured outputs
 - **Vite**: Bundles the package as an ES module with TypeScript declarations
+- **Vitest**: Testing framework for unit and integration tests
 
 ## Notes
 

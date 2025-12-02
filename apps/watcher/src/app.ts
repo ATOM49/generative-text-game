@@ -1,8 +1,13 @@
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import AutoLoad, { AutoloadPluginOptions } from '@fastify/autoload';
 import { FastifyPluginAsync, FastifyServerOptions } from 'fastify';
-import type { CDNPluginOptions } from './plugins/cdn';
-import type { ImageGenOptions } from './plugins/image-generation';
+import { ZodTypeProvider } from 'fastify-type-provider-zod';
+import type { CDNPluginOptions } from './plugins/cdn.js';
+import type { ImageGenOptions } from './plugins/image-generation.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export interface AppOptions
   extends FastifyServerOptions,
@@ -26,17 +31,18 @@ const app: FastifyPluginAsync<AppOptions> = async (
   fastify,
   opts,
 ): Promise<void> => {
+  const typed = fastify.withTypeProvider<ZodTypeProvider>();
   // This loads all plugins defined in plugins
   // those should be support plugins that are reused
   // through your application
-  void fastify.register(AutoLoad, {
+  void typed.register(AutoLoad, {
     dir: join(__dirname, 'plugins'),
     options: opts,
   });
 
   // This loads all plugins defined in routes
   // define your routes in one of these
-  void fastify.register(AutoLoad, {
+  void typed.register(AutoLoad, {
     dir: join(__dirname, 'routes'),
     options: opts,
   });

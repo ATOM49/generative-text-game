@@ -14,8 +14,15 @@ export const WorldBaseSchema = z.object({
     .max(4096, 'Context window cannot exceed 4096 tokens')
     .optional(),
   version: z.number().int().default(1),
-  mapImageUrl: z.string().url().optional(),
-  settings: z.record(z.string(), z.any()).optional(),
+  mapImageUrl: z
+    .string()
+    .url()
+    .optional()
+    .describe('URL of the world map image'),
+  settings: z
+    .record(z.string(), z.any())
+    .optional()
+    .describe('Additional world settings'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

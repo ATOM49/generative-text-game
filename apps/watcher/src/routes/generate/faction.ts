@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { factionPromptTemplate } from '../../prompts/generate-faction';
+import { factionPromptTemplate } from '../../prompts/generate-faction.js';
 
 interface FactionImageRequestBody {
   name: string;
@@ -115,16 +115,13 @@ const generateFaction: FastifyPluginAsync = async (fastify) => {
         let revisedPrompt: string | undefined;
 
         try {
-          // Reuse generatePortraitToCdn but with a faction-specific key prefix
-          // We use the name as the slug source
           const slug = name
             .toLowerCase()
             .replace(/\s+/g, '-')
             .replace(/[^a-z0-9-]/g, '');
 
-          const result = await fastify.imageGen.generatePortraitToCdn({
+          const result = await fastify.imageGen.generateImageToCdn({
             prompt,
-            characterName: name, // Used for slug generation if keyPrefix not provided, but we provide it
             keyPrefix: `factions/${slug}/`,
           });
           imageUrl = result.url;

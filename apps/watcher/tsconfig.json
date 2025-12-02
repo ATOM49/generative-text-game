@@ -1,8 +1,24 @@
 {
   "extends": "fastify-tsconfig",
   "compilerOptions": {
-    "outDir": "dist",
-    "sourceMap": true
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "noEmit": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": "./",
+    "paths": {
+      "@talespin/schema": [
+        "../../packages/schema/dist/index.d.ts",
+        "../../packages/schema/dist/index.js"
+      ],
+      "@talespin/schema/*": ["../../packages/schema/dist/*"]
+    }
   },
   "include": ["src/**/*.ts"]
 }

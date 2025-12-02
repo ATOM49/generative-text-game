@@ -28,7 +28,7 @@ export const FactionMetaSchema = z
   .object({
     tone: z
       .string()
-      .optional()
+      .default('')
       .describe(
         'High-level vibe or mood cues for narrative and prompt generation.',
       ),
@@ -54,18 +54,17 @@ export const FactionBaseSchema = z.object({
     .describe('Unique display name of the faction, culture, or species.'),
   summary: z
     .string()
-    .optional()
+    .default('')
     .describe('One-line teaser that appears in cards and listings.'),
   description: z
     .string()
-    .optional()
+    .default('')
     .describe(
       'Long-form description covering politics, customs, or hierarchy.',
     ),
   previewUrl: z
     .string()
-    .url()
-    .optional()
+    .default('')
     .describe('CDN URL pointing to an AI generated emblem or banner.'),
   category: FactionCategorySchema,
   meta: FactionMetaSchema,

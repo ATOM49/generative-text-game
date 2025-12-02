@@ -1,7 +1,12 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApiQuery } from '@/hooks/useApiQuery';
-import { World, RegionForm, LocationForm } from '@talespin/schema';
+import {
+  GridCell,
+  World,
+  type LocationForm,
+  type WorldGrid,
+} from '@talespin/schema';
 import MapEditor from '@/components/map-editor';
 import { Spinner } from '@/components/ui/spinner';
 import {
@@ -14,8 +19,13 @@ import {
   SidebarInset,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-import RegionFormComponent from '@/components/form/region';
 import LocationFormComponent from '@/components/form/location';
+import GridCellFormComponent from '@/components/form/grid-cell';
+
+type WorldGridResponse = {
+  grid: WorldGrid;
+  cells: GridCell[];
+};
 
 export default function LocationsPage({
   params,
@@ -24,47 +34,47 @@ export default function LocationsPage({
 }) {
   const { id } = React.use(params);
   const { data: world, isLoading } = useApiQuery<World>(`/api/worlds/${id}`);
-
-  // State for region creation workflow
-  const [currentRegion, setCurrentRegion] =
-    useState<Partial<RegionForm> | null>(null);
+  const { data: worldGrid, isLoading: isGridLoading } =
+    useApiQuery<WorldGridResponse>(`/api/worlds/${id}/grid`);
+  console.log({ world, worldGrid });
+  const [activeCellId, setActiveCellId] = useState<string | null>(null);
   const [currentLocation, setCurrentLocation] =
     useState<Partial<LocationForm> | null>(null);
 
-  // Handler for when a region polygon is created on the map
-  const handleRegionCreated = (geom: { outer: { u: number; v: number }[] }) => {
-    const newRegion: Partial<RegionForm> = {
-      name: `Region ${Date.now()}`,
-      geom,
-    };
-    setCurrentRegion(newRegion);
-    setCurrentLocation(null); // Clear location form
-  };
-
   // Handler for when a location is created on the map
-  const handleLocationCreated = (coordRel: { u: number; v: number }) => {
+  const handleLocationCreated = (
+    coordRel: { u: number; v: number },
+    cell?: GridCell,
+  ) => {
     const newLocation: Partial<LocationForm> = {
       name: `Location ${Date.now()}`,
       coordRel,
+      gridCellId: cell?._id,
     };
     setCurrentLocation(newLocation);
-    setCurrentRegion(null); // Clear region form
-  };
-
-  const handleRegionSuccess = () => {
-    setCurrentRegion(null);
   };
 
   const handleLocationSuccess = () => {
     setCurrentLocation(null);
   };
 
-  if (isLoading && !world) {
+  const handleCellSelected = (cell: GridCell | null) => {
+    setActiveCellId(cell?._id ?? null);
+  };
+
+  const activeCell = useMemo(() => {
+    if (!activeCellId || !worldGrid) {
+      return null;
+    }
+    return worldGrid.cells.find((cell) => cell._id === activeCellId) || null;
+  }, [activeCellId, worldGrid]);
+
+  if ((isLoading && !world) || (isGridLoading && !worldGrid)) {
     return <Spinner />;
   }
 
-  // Only show right sidebar when there's a region or location being created/edited
-  const showRightSidebar = currentRegion !== null || currentLocation !== null;
+  // Only show right sidebar when there's a cell selected or a location being created
+  const showRightSidebar = activeCell !== null || currentLocation !== null;
 
   return (
     <>
@@ -76,14 +86,16 @@ export default function LocationsPage({
               {isLoading ? 'Loading...' : `Map of ${world?.name || ''}`}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Create and manage regions and locations
+              Explore the world grid, inspect cells, and place locations
             </p>
           </div>
         </header>
         <div className="flex-1 overflow-auto">
           <MapEditor
             imageUrl={world?.mapImageUrl || ''}
-            onRegionCreated={handleRegionCreated}
+            grid={worldGrid}
+            activeCellId={activeCellId}
+            onCellSelected={handleCellSelected}
             onLocationCreated={handleLocationCreated}
           />
         </div>
@@ -97,23 +109,41 @@ export default function LocationsPage({
         >
           <SidebarHeader>
             <h2 className="text-lg font-semibold">
-              {currentRegion ? 'New Region' : 'New Location'}
+              {activeCell
+                ? `Cell (${activeCell.x}, ${activeCell.y})`
+                : 'New Location'}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {currentRegion
-                ? 'Configure the region details'
+              {activeCell
+                ? 'Review the selected grid cell'
                 : 'Configure the location details'}
             </p>
           </SidebarHeader>
           <SidebarContent>
-            {currentRegion && (
+            {activeCell && (
               <SidebarGroup>
-                <SidebarGroupLabel>Region Details</SidebarGroupLabel>
+                <SidebarGroupLabel>Grid Cell Details</SidebarGroupLabel>
                 <SidebarGroupContent>
-                  <RegionFormComponent
-                    worldId={id}
-                    defaultValues={currentRegion}
-                    onSuccess={handleRegionSuccess}
+                  <div className="space-y-3 rounded-md border p-3 text-sm mb-4">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Coordinates</span>
+                      <span className="font-medium">
+                        ({activeCell.x}, {activeCell.y})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setActiveCellId(null)}
+                    >
+                      Clear selection
+                    </button>
+                  </div>
+                  <GridCellFormComponent
+                    cell={activeCell}
+                    onSuccess={() => {
+                      // Optional: show toast or other feedback
+                    }}
                   />
                 </SidebarGroupContent>
               </SidebarGroup>

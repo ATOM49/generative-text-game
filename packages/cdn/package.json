@@ -1,6 +1,7 @@
 {
   "name": "@talespin/cdn",
   "version": "0.0.1",
+  "type": "module",
   "description": "CDN utilities for MinIO and image processing",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

@@ -4,6 +4,7 @@ import { ApiError } from './errors';
 import { WorldFormSchema, type World, type WorldForm } from '@talespin/schema';
 import { WorldQueryParamsSchema } from './types';
 import { ImageGenerationService } from './ai-image.service';
+import { GridService } from './grid.service';
 
 type PrismaWorld = {
   id: string;
@@ -107,6 +108,8 @@ export class WorldService {
 
       console.log(`World created with ID: ${world.id}`);
 
+      await new GridService(this.prisma).createDefaultGrid(world.id);
+
       // Step 2: Generate the map image (non-blocking, but we wait for it)
       try {
         mapImageUrl = await new ImageGenerationService().generateImageUrl(
@@ -146,6 +149,7 @@ export class WorldService {
       // If world creation failed, ensure we don't leave orphaned data
       if (world?.id) {
         try {
+          await new GridService(this.prisma).cleanup(world.id);
           await this.prisma.world.delete({ where: { id: world.id } });
           console.log(`Rolled back world creation for ID: ${world.id}`);
         } catch (rollbackError) {
@@ -191,6 +195,7 @@ export class WorldService {
 
   async deleteWorld(id: string): Promise<void> {
     try {
+      await new GridService(this.prisma).cleanup(id);
       await this.prisma.world.delete({
         where: { id },
       });

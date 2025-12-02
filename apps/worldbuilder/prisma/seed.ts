@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { MIDDLE_EARTH_WORLD, MIDDLE_EARTH_FACTIONS } from './seed-data';
 import { clearDatabase, generateWorldMap, seedFactions } from './seed-helpers';
+import { GridService } from '../src/lib/api/grid.service';
 
 const prisma = new PrismaClient();
 
@@ -15,6 +16,8 @@ async function seedWorld() {
       mapImageUrl: imageUrl,
     },
   });
+
+  await new GridService(prisma).createDefaultGrid(world.id);
 
   console.log(`✅ Created world: ${world.name} (${world.id})`);
   if (imageUrl) {

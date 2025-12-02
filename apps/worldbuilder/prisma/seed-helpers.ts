@@ -7,9 +7,7 @@ const WATCHER_API_URL = process.env.WATCHER_API_URL || 'http://localhost:4000';
  * Generate a world map image via the watcher API
  */
 export async function generateWorldMap(
-  worldData: Pick<WorldForm, 'name' | 'theme' | 'description'> & {
-    settings: string;
-  },
+  worldData: WorldForm,
 ): Promise<string | undefined> {
   try {
     console.log('🎨 Generating map image via DALL-E...');
@@ -102,11 +100,29 @@ export async function clearDatabase(prisma: PrismaClient) {
   await prisma.location.deleteMany({});
   console.log('   Cleared locations');
 
-  await prisma.region.deleteMany({});
-  console.log('   Cleared regions');
+  await prisma.treasureHuntEvent.deleteMany({});
+  console.log('   Cleared treasure hunt events');
+
+  await prisma.treasureHuntRun.deleteMany({});
+  console.log('   Cleared treasure hunt runs');
+
+  await prisma.playerWorldExploration.deleteMany({});
+  console.log('   Cleared player world explorations');
+
+  await prisma.treasureHuntConfig.deleteMany({});
+  console.log('   Cleared treasure hunt configs');
+
+  await prisma.gridCell.deleteMany({});
+  console.log('   Cleared grid cells');
+
+  await prisma.worldGrid.deleteMany({});
+  console.log('   Cleared world grids');
 
   await prisma.world.deleteMany({});
   console.log('   Cleared worlds');
+
+  await prisma.player.deleteMany({});
+  console.log('   Cleared players');
 
   console.log('✅ Database cleared\n');
 }

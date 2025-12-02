@@ -10,7 +10,9 @@ export const GridCellBaseSchema = z.object({
   y: z.number().int(),
   walkable: z.boolean(),
   biome: z.string().optional(),
-  regionId: Id.optional(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  tags: z.array(z.string()).default([]),
 });
 
 export const GridCellFormSchema = GridCellBaseSchema;

@@ -222,15 +222,14 @@ These grim wanderers are often mistaken for vagabonds, yet they carry noble bloo
   },
 ];
 
-export const MIDDLE_EARTH_WORLD: Omit<WorldForm, 'theme'> & {
-  theme: string;
-  settings: string;
-} = {
+export const MIDDLE_EARTH_WORLD: WorldForm = {
   name: 'Middle-earth',
-  theme:
-    'Epic high fantasy with ancient magic, diverse races, and looming darkness',
+  theme: 'fantasy',
   description:
     'A vast realm of legendary heroes, ancient kingdoms, and timeless struggles between light and shadow. From the peaceful Shire to the dark lands of Mordor, Middle-earth is a world of wonder, danger, and profound beauty.',
-  settings:
-    'The Shire (rolling green hills), Rivendell (hidden elven valley), Moria (ancient dwarven mines), Lothlórien (golden forest), Rohan (vast grasslands), Gondor (white cities), Mordor (volcanic wasteland), Misty Mountains, Fangorn Forest',
+  settings: {
+    key: 'middle-earth',
+    name: 'Middle-earth',
+    version: 'Third Age',
+  },
 };

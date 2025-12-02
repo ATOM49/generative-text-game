@@ -10,7 +10,7 @@ type PrismaLocation = {
   id: string;
   worldId: string;
   name: string;
-  regionId: string | null;
+  gridCellId: string | null;
   coordRel: Prisma.JsonValue;
   props: Prisma.JsonValue | null;
 };
@@ -20,7 +20,7 @@ const locationSelect = {
     id: true,
     worldId: true,
     name: true,
-    regionId: true,
+    gridCellId: true,
     coordRel: true,
     props: true,
   },
@@ -61,7 +61,7 @@ export class LocationService {
         data: {
           worldId,
           name: validated.name,
-          regionId: validated.regionId || null,
+          gridCellId: validated.gridCellId || null,
           coordRel: validated.coordRel as Prisma.InputJsonValue,
           props: (validated.props as Prisma.InputJsonValue) || null,
         },
@@ -87,7 +87,7 @@ export class LocationService {
         where: { id },
         data: {
           name: validated.name,
-          regionId: validated.regionId || null,
+          gridCellId: validated.gridCellId || null,
           coordRel: validated.coordRel as Prisma.InputJsonValue,
           props: (validated.props as Prisma.InputJsonValue) || null,
         },
@@ -125,7 +125,7 @@ export class LocationService {
       _id: location.id,
       worldId: location.worldId,
       name: location.name,
-      regionId: location.regionId || undefined,
+      gridCellId: location.gridCellId || undefined,
       coordRel: location.coordRel as Location['coordRel'],
       props: location.props as Location['props'],
     };

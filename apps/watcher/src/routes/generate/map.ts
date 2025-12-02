@@ -1,13 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
-import { mapPromptTemplate } from '../../prompts/generate-map';
-
-interface WorldRequestBody {
-  name: string;
-  description?: string;
-  theme: string;
-  contextWindowLimit?: number;
-  settings?: string;
-}
+import { mapPromptTemplate } from '../../prompts/generate-map.js';
+import { type World } from '@talespin/schema';
 
 interface GenerateMapResponse {
   imageUrl: string;
@@ -20,7 +13,7 @@ interface ErrorResponse {
 
 const generateMap: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
-    Body: WorldRequestBody;
+    Body: World;
     Reply: GenerateMapResponse | ErrorResponse;
   }>(
     '/',
@@ -107,9 +100,14 @@ const generateMap: FastifyPluginAsync = async (fastify) => {
         // Use shared image generation plugin (uploads to CDN/MinIO)
         let imageUrl: string;
         try {
-          const res = await fastify.imageGen.generateMapToCdn({
+          const slug = world.name
+            .toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, '');
+
+          const res = await fastify.imageGen.generateImageToCdn({
             prompt,
-            worldName: world.name,
+            keyPrefix: `maps/${slug}/`,
             size: '1024x1024',
           });
           imageUrl = res.url;

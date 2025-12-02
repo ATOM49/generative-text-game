@@ -6,7 +6,7 @@ export const EntityBaseSchema = z.object({
   type: EntityType,
   name: z.string(),
   locationId: Id.optional(),
-  regionId: Id.optional(),
+  gridCellId: Id.optional(),
   coordRel: RelCoord.optional(),
   attributes: z.record(z.string(), z.any()).optional(),
   tags: z.array(z.string()).default([]),

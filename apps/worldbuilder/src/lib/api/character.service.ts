@@ -78,7 +78,12 @@ export class CharacterService {
     }
 
     if (associationFilters.length) {
-      where.AND = [...(where.AND ?? []), ...associationFilters];
+      const existingAnd = where.AND
+        ? Array.isArray(where.AND)
+          ? where.AND
+          : [where.AND]
+        : [];
+      where.AND = [...existingAnd, ...associationFilters];
     }
 
     const characters = await this.prisma.character.findMany({
