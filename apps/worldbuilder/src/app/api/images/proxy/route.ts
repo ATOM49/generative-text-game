@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '@/lib/auth/guards';
 
 export async function GET(request: NextRequest) {
   try {
+    await requireUser();
     const searchParams = request.nextUrl.searchParams;
     const imageUrl = searchParams.get('url');
 

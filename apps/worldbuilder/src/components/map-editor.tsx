@@ -36,6 +36,7 @@ interface MapEditorProps {
     coordRel: { u: number; v: number },
     cell?: GridCell,
   ) => void;
+  canEdit?: boolean;
 }
 
 const DEFAULT_CANVAS_WIDTH = 1024;
@@ -47,6 +48,7 @@ export default function MapEditor({
   onCellSelected,
   onCellsSelected,
   onLocationCreated,
+  canEdit = true,
 }: MapEditorProps) {
   const [tool, setTool] = useState<Tool>('select');
   const [imageError, setImageError] = useState<string | null>(null);
@@ -87,8 +89,15 @@ export default function MapEditor({
   }, [grid, setConfig]);
 
   useEffect(() => {
-    setInteractionMode(tool === 'location' ? 'location' : 'grid');
-  }, [setInteractionMode, tool]);
+    if (!canEdit) {
+      setTool('select');
+    }
+  }, [canEdit]);
+
+  useEffect(() => {
+    const mode = canEdit && tool === 'location' ? 'location' : 'grid';
+    setInteractionMode(mode);
+  }, [setInteractionMode, tool, canEdit]);
 
   const resolveCellFromRelative = useCallback(
     (point: TRelCoord): GridCell | undefined => {
@@ -218,7 +227,7 @@ export default function MapEditor({
 
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !canEdit) return;
 
     const handleLocationClick = (event: TPointerEventInfo) => {
       if (tool !== 'location') return;
@@ -266,6 +275,7 @@ export default function MapEditor({
     resolveCellFromRelative,
     toRelative,
     tool,
+    canEdit,
   ]);
 
   const handleSerialize = useCallback(() => {
@@ -274,12 +284,15 @@ export default function MapEditor({
   }, [serializeForMongo]);
 
   const toolbarHint = useMemo(() => {
-    if (tool === 'location') {
+    if (!grid) return 'Grid data is not available for this world yet';
+    if (tool === 'location' && canEdit) {
       return 'Click on the map to drop a location marker';
     }
-    if (!grid) return 'Grid data is not available for this world yet';
+    if (!canEdit) {
+      return 'Explorer role: select cells to inspect them';
+    }
     return 'Click or drag to select cells';
-  }, [grid, tool]);
+  }, [grid, tool, canEdit]);
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-gray-100">
@@ -291,14 +304,16 @@ export default function MapEditor({
 
       <div className="absolute left-4 top-4 z-10 flex min-w-[280px] flex-col gap-3 rounded bg-white p-4 shadow-lg">
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant={tool === 'location' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setTool('location')}
-          >
-            <MapPin className="mr-2 h-4 w-4" />
-            Add Location
-          </Button>
+          {canEdit && (
+            <Button
+              variant={tool === 'location' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setTool('location')}
+            >
+              <MapPin className="mr-2 h-4 w-4" />
+              Add Location
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setTool('select')}>
             Select
           </Button>
@@ -309,9 +324,11 @@ export default function MapEditor({
           >
             {config.showGrid ? 'Hide Grid' : 'Show Grid'}
           </Button>
-          <Button variant="outline" size="sm" onClick={handleSerialize}>
-            Export Grid JSON
-          </Button>
+          {canEdit && (
+            <Button variant="outline" size="sm" onClick={handleSerialize}>
+              Export Grid JSON
+            </Button>
+          )}
         </div>
         <span className="text-sm text-muted-foreground">{toolbarHint}</span>
       </div>

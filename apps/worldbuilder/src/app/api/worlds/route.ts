@@ -4,11 +4,13 @@ import { WorldFormSchema } from '@talespin/schema';
 import { WorldQueryParamsSchema } from '@/lib/api/types';
 import { handleApiError } from '@/lib/api/errors';
 import { prisma } from '@/lib/prisma';
+import { requireUser, BUILDER_ONLY } from '@/lib/auth/guards';
 
 const worldService = new WorldService(prisma);
 
 export async function GET(request: NextRequest) {
   try {
+    await requireUser();
     const { searchParams } = new URL(request.url);
     const params = Object.fromEntries(searchParams.entries());
     const validatedParams = WorldQueryParamsSchema.parse(params);
@@ -22,6 +24,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    await requireUser(BUILDER_ONLY);
     const data = await req.json();
     const validatedData = WorldFormSchema.parse(data);
 

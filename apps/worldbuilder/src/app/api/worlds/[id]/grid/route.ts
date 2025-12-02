@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/api/errors';
 import { GridService } from '@/lib/api/grid.service';
+import { requireUser } from '@/lib/auth/guards';
 
 const gridService = new GridService(prisma);
 
@@ -10,6 +11,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireUser();
     const { id: worldId } = await context.params;
     const payload = await gridService.getWorldGrid(worldId);
     return NextResponse.json(payload);

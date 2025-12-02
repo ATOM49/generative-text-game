@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { handleApiError } from '@/lib/api/errors';
 import { FactionService } from '@/lib/api/faction.service';
 import { FactionQueryParamsSchema } from '@/lib/api/types';
+import { requireUser, BUILDER_ONLY } from '@/lib/auth/guards';
 
 const factionService = new FactionService(prisma);
 
@@ -11,6 +12,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireUser();
     const { id: worldId } = await context.params;
     const searchParams = Object.fromEntries(
       new URL(request.url).searchParams.entries(),
@@ -28,6 +30,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireUser(BUILDER_ONLY);
     const { id: worldId } = await context.params;
     const body = await request.json();
     const faction = await factionService.createFaction(worldId, body);

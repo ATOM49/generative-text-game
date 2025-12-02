@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Talespin Worldbuilder
+
+The worldbuilder app is a Next.js 15 client for creating and curating Talespin worlds. It relies on MongoDB via Prisma, the shared `@talespin/schema` package, and now uses **NextAuth** with Google and Facebook providers for authentication.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# From repo root
+pnpm install
+
+# Generate Prisma client after any schema change
+pnpm --filter @talespin/worldbuilder exec prisma generate
+
+# Start the Next.js dev server on :3000
+pnpm dev:world
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Required Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Create `apps/worldbuilder/.env` (or populate your shared env) with the following:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+DATABASE_URL="mongodb://localhost:27017/talespin?replicaSet=rs0"
+WATCHER_API_URL="http://localhost:4000"
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="generate-a-long-random-string"
 
-## Learn More
+# OAuth providers
+GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="..."
+FACEBOOK_CLIENT_ID="..."
+FACEBOOK_CLIENT_SECRET="..."
 
-To learn more about Next.js, take a look at the following resources:
+NEXT_PUBLIC_COPILOT_CLOUD_PUBLIC_API_KEY="..."
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Restart `pnpm dev:world` any time you change `NEXTAUTH_*` or provider credentials.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Authentication & Roles
 
-## Deploy on Vercel
+- Sign-in is handled by NextAuth (JWT session strategy) with Google and Facebook providers.
+- A `User` + `Account` schema has been added to Prisma. Users default to the `EXPLORER` role when they first log in.
+- **Builder** role enables world creation, map editing, and access to watcher-backed mutations. Explorers can browse maps and data but cannot mutate.
+- Promote a user by updating their record via Prisma Studio or `mongosh`. Example:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+# Open Prisma Studio and edit the user entry's role column
+pnpm --filter @talespin/worldbuilder exec prisma studio
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Prisma Maintenance
+
+```bash
+# Re-generate client after schema changes
+pnpm --filter @talespin/worldbuilder exec prisma generate
+
+# Push schema to MongoDB (requires replica set)
+cd apps/worldbuilder
+pnpm dlx prisma db push
+```
+
+### Development Tips
+
+- Protected routes: All `/api/*` endpoints (except `/api/auth/*`) and worldbuilder pages now require an authenticated session. Unauthenticated users are redirected to `/signin`.
+- The `/signin` page exposes Google and Facebook buttons. Callback URLs inherit the page you attempted to visit.
+- Builder-only UI affordances (create world dialog, grid editors, watcher calls) are hidden from explorers, but server routes also enforce roles for defense in depth.

@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/sidebar';
 import LocationFormComponent from '@/components/form/location';
 import GridCellFormComponent from '@/components/form/grid-cell';
+import { useSession } from 'next-auth/react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 type WorldGridResponse = {
   grid: WorldGrid;
@@ -33,10 +35,22 @@ export default function LocationsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = React.use(params);
-  const { data: world, isLoading } = useApiQuery<World>(`/api/worlds/${id}`);
+  const { data: session, status } = useSession();
+  const isSessionLoading = status === 'loading';
+  const isAuthenticated = status === 'authenticated';
+  const canEdit = session?.user?.role === 'BUILDER';
+
+  const { data: world, isLoading } = useApiQuery<World>(
+    `/api/worlds/${id}`,
+    undefined,
+    {
+      enabled: isAuthenticated,
+    },
+  );
   const { data: worldGrid, isLoading: isGridLoading } =
-    useApiQuery<WorldGridResponse>(`/api/worlds/${id}/grid`);
-  console.log({ world, worldGrid });
+    useApiQuery<WorldGridResponse>(`/api/worlds/${id}/grid`, undefined, {
+      enabled: isAuthenticated,
+    });
   const [activeCellId, setActiveCellId] = useState<string | null>(null);
   const [currentLocation, setCurrentLocation] =
     useState<Partial<LocationForm> | null>(null);
@@ -46,6 +60,7 @@ export default function LocationsPage({
     coordRel: { u: number; v: number },
     cell?: GridCell,
   ) => {
+    if (!canEdit) return;
     const newLocation: Partial<LocationForm> = {
       name: `Location ${Date.now()}`,
       coordRel,
@@ -55,6 +70,7 @@ export default function LocationsPage({
   };
 
   const handleLocationSuccess = () => {
+    if (!canEdit) return;
     setCurrentLocation(null);
   };
 
@@ -69,7 +85,11 @@ export default function LocationsPage({
     return worldGrid.cells.find((cell) => cell._id === activeCellId) || null;
   }, [activeCellId, worldGrid]);
 
-  if ((isLoading && !world) || (isGridLoading && !worldGrid)) {
+  if (
+    isSessionLoading ||
+    (isLoading && !world) ||
+    (isGridLoading && !worldGrid)
+  ) {
     return <Spinner />;
   }
 
@@ -90,14 +110,26 @@ export default function LocationsPage({
             </p>
           </div>
         </header>
-        <div className="flex-1 overflow-auto">
-          <MapEditor
-            imageUrl={world?.mapImageUrl || ''}
-            grid={worldGrid}
-            activeCellId={activeCellId}
-            onCellSelected={handleCellSelected}
-            onLocationCreated={handleLocationCreated}
-          />
+        <div className="flex flex-1 flex-col gap-4 overflow-hidden p-4">
+          {!canEdit && (
+            <Alert className="mb-4">
+              <AlertTitle>Explorer access</AlertTitle>
+              <AlertDescription>
+                You can inspect the map and cells, but only builders can edit
+                terrain or add locations.
+              </AlertDescription>
+            </Alert>
+          )}
+          <div className="flex-1 min-h-0">
+            <MapEditor
+              imageUrl={world?.mapImageUrl || ''}
+              grid={worldGrid}
+              activeCellId={activeCellId}
+              onCellSelected={handleCellSelected}
+              onLocationCreated={canEdit ? handleLocationCreated : undefined}
+              canEdit={canEdit}
+            />
+          </div>
         </div>
       </SidebarInset>
       {showRightSidebar && (
@@ -139,16 +171,22 @@ export default function LocationsPage({
                       Clear selection
                     </button>
                   </div>
-                  <GridCellFormComponent
-                    cell={activeCell}
-                    onSuccess={() => {
-                      // Optional: show toast or other feedback
-                    }}
-                  />
+                  {canEdit ? (
+                    <GridCellFormComponent
+                      cell={activeCell}
+                      onSuccess={() => {
+                        // Optional: show toast or other feedback
+                      }}
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Builder role required to edit grid metadata.
+                    </p>
+                  )}
                 </SidebarGroupContent>
               </SidebarGroup>
             )}
-            {currentLocation && (
+            {canEdit && currentLocation && (
               <SidebarGroup>
                 <SidebarGroupLabel>Location Details</SidebarGroupLabel>
                 <SidebarGroupContent>

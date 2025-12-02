@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { LocationService } from '@/lib/api/location.service';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/api/errors';
+import { requireUser, BUILDER_ONLY } from '@/lib/auth/guards';
 
 const locationService = new LocationService(prisma);
 
@@ -10,6 +11,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireUser();
     const { id: worldId } = await context.params;
     const locations = await locationService.listLocations(worldId);
     return NextResponse.json(locations);
@@ -33,6 +35,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireUser(BUILDER_ONLY);
     const { id: worldId } = await context.params;
     const body = await request.json();
     const location = await locationService.createLocation(worldId, body);

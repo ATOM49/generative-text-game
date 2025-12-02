@@ -11,6 +11,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarFooter,
 } from '@/components/ui/sidebar';
 import {
   Globe,
@@ -19,14 +20,13 @@ import {
   Scroll,
   Settings,
   ChevronLeftIcon,
-  WholeWordIcon,
-  GlobeIcon,
   WandIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
+import { UserMenu } from '@/components/auth/user-menu';
 
 export function AppSidebar() {
   const path = usePathname() || '';
@@ -71,6 +71,9 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <UserMenu />
+      </SidebarFooter>
     </Sidebar>
   );
 }

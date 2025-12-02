@@ -3,6 +3,7 @@ import { WorldService } from '@/lib/api/world.service';
 import { WorldFormSchema } from '@talespin/schema';
 import { handleApiError } from '@/lib/api/errors';
 import { prisma } from '@/lib/prisma';
+import { requireUser, BUILDER_ONLY } from '@/lib/auth/guards';
 
 const worldService = new WorldService(prisma);
 
@@ -11,6 +12,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireUser();
     const { id } = await params;
     const world = await worldService.getWorld(id);
     return NextResponse.json(world);
@@ -24,6 +26,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireUser(BUILDER_ONLY);
     const data = await req.json();
     const { id } = await params;
     const validatedData = WorldFormSchema.parse(data);
@@ -40,6 +43,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireUser(BUILDER_ONLY);
     const { id } = await params;
     await worldService.deleteWorld(id);
     return new NextResponse(null, { status: 204 });

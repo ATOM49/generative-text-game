@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { ApiError, handleApiError } from '@/lib/api/errors';
+import { handleApiError } from '@/lib/api/errors';
 import { GridService } from '@/lib/api/grid.service';
 import { GridCellFormSchema } from '@talespin/schema';
+import { requireUser, BUILDER_ONLY } from '@/lib/auth/guards';
 
 const gridService = new GridService(prisma);
 
@@ -11,6 +12,7 @@ export async function PUT(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requireUser(BUILDER_ONLY);
     const { id } = await context.params;
     const data = await req.json();
 

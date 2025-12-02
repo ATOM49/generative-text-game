@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleApiError } from '@/lib/api/errors';
 import { CharacterService } from '@/lib/api/character.service';
+import { requireUser, BUILDER_ONLY } from '@/lib/auth/guards';
 
 const characterService = new CharacterService(prisma);
 
@@ -9,6 +10,7 @@ type Params = Promise<{ id: string; characterId: string }>;
 
 export async function GET(_request: NextRequest, context: { params: Params }) {
   try {
+    await requireUser();
     const { id: worldId, characterId } = await context.params;
     const character = await characterService.getCharacter(worldId, characterId);
     return NextResponse.json(character);
@@ -19,6 +21,7 @@ export async function GET(_request: NextRequest, context: { params: Params }) {
 
 export async function PUT(request: NextRequest, context: { params: Params }) {
   try {
+    await requireUser(BUILDER_ONLY);
     const { id: worldId, characterId } = await context.params;
     const body = await request.json();
     const character = await characterService.updateCharacter(
@@ -37,6 +40,7 @@ export async function DELETE(
   context: { params: Params },
 ) {
   try {
+    await requireUser(BUILDER_ONLY);
     const { id: worldId, characterId } = await context.params;
     await characterService.deleteCharacter(worldId, characterId);
     return NextResponse.json({ ok: true });

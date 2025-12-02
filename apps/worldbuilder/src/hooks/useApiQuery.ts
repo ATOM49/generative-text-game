@@ -45,7 +45,9 @@ export function useApiQuery<T = unknown>(
   return useQuery<T, Error>({
     queryKey: buildQueryKey(path, params),
     queryFn: async () => {
-      const res = await fetch(buildUrl(path, params));
+      const res = await fetch(buildUrl(path, params), {
+        credentials: 'same-origin',
+      });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
@@ -71,6 +73,7 @@ export function useApiMutation<T = unknown, TVariables = any>(
         {
           method,
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
           body: method === 'DELETE' ? undefined : JSON.stringify(variables),
         },
       );

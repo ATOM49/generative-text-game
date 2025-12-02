@@ -4,6 +4,7 @@ import {
   type EditImageRequestInput,
 } from '@/lib/api/ai-image.service';
 import { ApiError, handleApiError } from '@/lib/api/errors';
+import { requireUser, BUILDER_ONLY } from '@/lib/auth/guards';
 
 const EDIT_PROMPT =
   'Enhance the selected region with richer topography, seamless blending, and story-driven landmarks consistent with the surrounding map style.';
@@ -12,6 +13,7 @@ const imageGenerationService = new ImageGenerationService();
 
 export async function POST(request: NextRequest) {
   try {
+    await requireUser(BUILDER_ONLY);
     let body: unknown;
     try {
       body = await request.json();
