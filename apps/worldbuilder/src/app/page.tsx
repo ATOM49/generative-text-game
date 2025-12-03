@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTrigger,
@@ -26,22 +26,32 @@ import { Spinner } from '@/components/ui/spinner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ROLE_LABELS, isBuilder } from '@/lib/auth/roles';
 import { UserMenu } from '@/components/auth/user-menu';
+import { useRouter } from 'next/navigation';
 
 export default function WorldsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { data: session, status } = useSession();
+  const router = useRouter();
   const isSessionLoading = status === 'loading';
   const isAuthenticated = status === 'authenticated';
   const canCreateWorld = isBuilder(session?.user?.role);
   const roleLabel = session?.user?.role
     ? ROLE_LABELS[session.user.role]
-    : ROLE_LABELS.EXPLORER;
+    : 'Explorer';
+
+  // Redirect to role selection if authenticated but no role
+  useEffect(() => {
+    if (isAuthenticated && session?.user && !session.user.role) {
+      const callbackUrl = encodeURIComponent(window.location.href);
+      router.push(`/choose-role?callbackUrl=${callbackUrl}`);
+    }
+  }, [isAuthenticated, session, router]);
 
   // Fetch worlds using useApiQuery
   const { data, isLoading } = useApiQuery<PaginatedResponse<World>>(
     '/api/worlds',
     undefined,
-    { enabled: isAuthenticated },
+    { enabled: isAuthenticated && !!session?.user?.role },
   );
   const worlds = data?.data ?? [];
 

@@ -39,7 +39,7 @@ Restart `pnpm dev:world` any time you change `NEXTAUTH_*` or provider credential
 ### Authentication & Roles
 
 - Sign-in is handled by NextAuth (JWT session strategy) with Google and Facebook providers.
-- A `User` + `Account` schema has been added to Prisma. Users default to the `EXPLORER` role when they first log in.
+- A `User` + `Account` schema has been added to Prisma. New users must choose between `BUILDER` and `EXPLORER` roles during onboarding.
 - **Builder** role enables world creation, map editing, and access to watcher-backed mutations. Explorers can browse maps and data but cannot mutate.
 - Promote a user by updating their record via Prisma Studio or `mongosh`. Example:
 

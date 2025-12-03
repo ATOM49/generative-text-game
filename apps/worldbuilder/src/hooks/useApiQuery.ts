@@ -48,7 +48,17 @@ export function useApiQuery<T = unknown>(
       const res = await fetch(buildUrl(path, params), {
         credentials: 'same-origin',
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const errorData = await res
+          .json()
+          .catch(async () => ({ error: await res.text() }));
+        if (errorData.redirectTo) {
+          const callbackUrl = encodeURIComponent(window.location.href);
+          window.location.href = `${errorData.redirectTo}?callbackUrl=${callbackUrl}`;
+          throw new Error('Redirecting...');
+        }
+        throw new Error(errorData.error || 'Request failed');
+      }
       return res.json();
     },
     ...options,
@@ -77,7 +87,17 @@ export function useApiMutation<T = unknown, TVariables = any>(
           body: method === 'DELETE' ? undefined : JSON.stringify(variables),
         },
       );
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const errorData = await res
+          .json()
+          .catch(async () => ({ error: await res.text() }));
+        if (errorData.redirectTo) {
+          const callbackUrl = encodeURIComponent(window.location.href);
+          window.location.href = `${errorData.redirectTo}?callbackUrl=${callbackUrl}`;
+          throw new Error('Redirecting...');
+        }
+        throw new Error(errorData.error || 'Request failed');
+      }
       return res.json();
     },
     ...options,

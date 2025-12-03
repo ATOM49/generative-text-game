@@ -12,7 +12,7 @@
     "build:cdn": "pnpm --filter @talespin/cdn build",
     "build": "pnpm build:schema && pnpm build:ai && pnpm build:cdn && pnpm build:world && pnpm build:watcher",
     "dev": "concurrently \"pnpm dev:world\" \"pnpm dev:watcher\"",
-    "clean": "rimraf packages/*/dist apps/*/dist apps/*/node_modules/.cache packages/*/node_modules/.cache",
+    "clean": "rimraf packages/*/dist apps/*/dist apps/*/node_modules/.cache packages/*/node_modules/.cache apps/worldbuilder/.next",
     "lint": "eslint .",
     "format": "prettier --write .",
     "prepare": "husky"

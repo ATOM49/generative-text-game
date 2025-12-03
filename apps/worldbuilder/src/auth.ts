@@ -5,8 +5,6 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import type { AppUserRole } from '@/lib/auth/roles';
 
-const DEFAULT_ROLE: AppUserRole = 'EXPLORER';
-
 const ensureEnv = (key: string) => {
   const value = process.env[key];
   if (!value) {
@@ -32,16 +30,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   providers: [googleProvider, facebookProvider],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
-        token.role = (user.role as AppUserRole) ?? DEFAULT_ROLE;
+        token.role = (user.role as AppUserRole | undefined) ?? undefined;
+        return token;
       }
+
+      // Always fetch latest role on update trigger or when role is missing
+      if ((trigger === 'update' || !token.role) && token.sub) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.sub },
+          select: { role: true },
+        });
+        token.role = (dbUser?.role as AppUserRole | undefined) ?? undefined;
+      }
+
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub ?? '';
-        session.user.role = (token.role as AppUserRole) ?? DEFAULT_ROLE;
+        session.user.role = token.role as AppUserRole | undefined;
       }
       return session;
     },

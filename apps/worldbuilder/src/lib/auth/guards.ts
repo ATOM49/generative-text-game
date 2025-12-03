@@ -18,6 +18,10 @@ export async function requireUser(allowedRoles?: AppUserRole[]) {
     throw new ApiError(401, 'Authentication required');
   }
 
+  if (!session.user.role) {
+    throw new ApiError(403, 'Please select a role to continue');
+  }
+
   if (allowedRoles && !allowedRoles.includes(session.user.role)) {
     throw new ApiError(403, 'Insufficient permissions for this action');
   }
