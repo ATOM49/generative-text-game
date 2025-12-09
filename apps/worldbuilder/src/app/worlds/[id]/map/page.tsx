@@ -1,5 +1,5 @@
 'use client';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useApiQuery } from '@/hooks/useApiQuery';
 import {
   GridCell,
@@ -7,22 +7,16 @@ import {
   type LocationForm,
   type WorldGrid,
 } from '@talespin/schema';
-import MapEditor from '@/components/map-editor';
+import { MapViewer } from '@/components/map-viewer';
+import { MapEditorWithToolbar } from '@/components/map-editor-with-toolbar';
 import { Spinner } from '@/components/ui/spinner';
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
-  SidebarInset,
-  SidebarTrigger,
 } from '@/components/ui/sidebar';
-import LocationFormComponent from '@/components/form/location';
 import GridCellFormComponent from '@/components/form/grid-cell';
 import { useSession } from 'next-auth/react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 type WorldGridResponse = {
   grid: WorldGrid;
@@ -78,6 +72,11 @@ export default function LocationsPage({
     setActiveCellId(cell?._id ?? null);
   };
 
+  const handleCellClick = useCallback((cell: GridCell) => {
+    // When a single cell is clicked, set it as active
+    setActiveCellId(cell._id);
+  }, []);
+
   const activeCell = useMemo(() => {
     if (!activeCellId || !worldGrid) {
       return null;
@@ -93,114 +92,61 @@ export default function LocationsPage({
     return <Spinner />;
   }
 
-  // Only show right sidebar when there's a cell selected or a location being created
-  const showRightSidebar = activeCell !== null || currentLocation !== null;
+  const renderCellDetails = (cell: GridCell, onClose: () => void) => (
+    <SidebarGroup>
+      <SidebarGroupLabel>Grid Cell Details</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <div className="space-y-3 rounded-md border p-3 text-sm mb-4">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Coordinates</span>
+            <span className="font-medium">
+              ({cell.x}, {cell.y})
+            </span>
+          </div>
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-foreground"
+            onClick={onClose}
+          >
+            Clear selection
+          </button>
+        </div>
+        {canEdit && (
+          <GridCellFormComponent
+            cell={cell}
+            onSuccess={() => {
+              // Optional: show toast or other feedback
+            }}
+          />
+        )}
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
 
   return (
-    <>
-      <SidebarInset className="flex flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <div className="flex-1">
-            <h1 className="text-lg font-semibold">
-              {isLoading ? 'Loading...' : `Map of ${world?.name || ''}`}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Explore the world grid, inspect cells, and place locations
-            </p>
-          </div>
-        </header>
-        <div className="flex flex-1 flex-col gap-4 overflow-hidden p-4">
-          {!canEdit && (
-            <Alert className="mb-4">
-              <AlertTitle>Explorer access</AlertTitle>
-              <AlertDescription>
-                You can inspect the map and cells, but only builders can edit
-                terrain or add locations.
-              </AlertDescription>
-            </Alert>
-          )}
-          <div className="flex-1 min-h-0">
-            <MapEditor
-              imageUrl={world?.mapImageUrl || ''}
-              grid={worldGrid}
-              activeCellId={activeCellId}
-              onCellSelected={handleCellSelected}
-              onLocationCreated={canEdit ? handleLocationCreated : undefined}
-              canEdit={canEdit}
-            />
-          </div>
-        </div>
-      </SidebarInset>
-      {showRightSidebar && (
-        <Sidebar
-          side="right"
-          variant="sidebar"
-          collapsible="none"
-          className="border-l"
-        >
-          <SidebarHeader>
-            <h2 className="text-lg font-semibold">
-              {activeCell
-                ? `Cell (${activeCell.x}, ${activeCell.y})`
-                : 'New Location'}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {activeCell
-                ? 'Review the selected grid cell'
-                : 'Configure the location details'}
-            </p>
-          </SidebarHeader>
-          <SidebarContent>
-            {activeCell && (
-              <SidebarGroup>
-                <SidebarGroupLabel>Grid Cell Details</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <div className="space-y-3 rounded-md border p-3 text-sm mb-4">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Coordinates</span>
-                      <span className="font-medium">
-                        ({activeCell.x}, {activeCell.y})
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className="text-xs text-muted-foreground hover:text-foreground"
-                      onClick={() => setActiveCellId(null)}
-                    >
-                      Clear selection
-                    </button>
-                  </div>
-                  {canEdit ? (
-                    <GridCellFormComponent
-                      cell={activeCell}
-                      onSuccess={() => {
-                        // Optional: show toast or other feedback
-                      }}
-                    />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Builder role required to edit grid metadata.
-                    </p>
-                  )}
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )}
-            {canEdit && currentLocation && (
-              <SidebarGroup>
-                <SidebarGroupLabel>Location Details</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <LocationFormComponent
-                    worldId={id}
-                    defaultValues={currentLocation}
-                    onSuccess={handleLocationSuccess}
-                  />
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )}
-          </SidebarContent>
-        </Sidebar>
-      )}
-    </>
+    <div className="flex-1 flex flex-col overflow-hidden h-full">
+      <div className="flex-1 min-h-0">
+        {canEdit ? (
+          <MapEditorWithToolbar
+            imageUrl={world?.mapImageUrl || ''}
+            grid={worldGrid}
+            activeCellId={activeCellId}
+            onCellSelected={handleCellSelected}
+            onCellClick={handleCellClick}
+            onLocationCreated={handleLocationCreated}
+            renderCellDetails={renderCellDetails}
+          />
+        ) : (
+          <MapViewer
+            imageUrl={world?.mapImageUrl || ''}
+            grid={worldGrid}
+            activeCellId={activeCellId}
+            onCellSelected={handleCellSelected}
+            onCellClick={handleCellClick}
+            showGrid={true}
+          />
+        )}
+      </div>
+    </div>
   );
 }

@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  CharacterGalleryImageSchema,
+  CharacterImageRequestSchema,
+  type CharacterImageRequestInput,
+} from '@talespin/schema';
 
 export interface ImageGenerationOptions {
   timeout?: number;
@@ -51,26 +56,11 @@ const EditImageResponseSchema = z.object({
 export type EditImageRequestInput = z.input<typeof EditImageRequestSchema>;
 export type EditImageResponse = z.infer<typeof EditImageResponseSchema>;
 
-const CharacterGroupSchema = z.object({
-  name: z.string().min(1),
-  summary: z.string().optional(),
+const CharacterGalleryResponseSchema = z.object({
+  imageUrl: z.string().url(),
+  revisedPrompt: z.string().optional(),
+  images: z.array(CharacterGalleryImageSchema).min(1),
 });
-
-export const CharacterImageRequestSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  biography: z.string().optional(),
-  factions: z.array(CharacterGroupSchema).default([]),
-  cultures: z.array(CharacterGroupSchema).default([]),
-  species: z.array(CharacterGroupSchema).default([]),
-  archetypes: z.array(CharacterGroupSchema).default([]),
-  traits: z.array(z.string()).default([]),
-  promptHint: z.string().optional(),
-});
-
-export type CharacterImageRequestInput = z.input<
-  typeof CharacterImageRequestSchema
->;
 
 export const FactionImageRequestSchema = z.object({
   name: z.string().min(1),
@@ -299,6 +289,45 @@ export class ImageGenerationService {
         error: 'Image edit request failed',
         details: error instanceof Error ? error.message : 'Unknown error',
       };
+    }
+  }
+
+  async generateCharacterGallery(
+    data: unknown,
+  ): Promise<z.infer<typeof CharacterGalleryImageSchema>[] | null> {
+    try {
+      const validatedData = CharacterImageRequestSchema.parse(data);
+      const response = await this.callWatcherWithRetry(
+        '/generate/character',
+        JSON.stringify(validatedData),
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(
+          `Failed to generate character gallery (${response.status}):`,
+          errorText,
+        );
+        return null;
+      }
+
+      const raw = await response.json();
+      const parsed = CharacterGalleryResponseSchema.safeParse(raw);
+
+      if (!parsed.success) {
+        console.error('Invalid gallery payload received:', parsed.error);
+        return null;
+      }
+
+      return parsed.data.images;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.error('Gallery request validation error:', error.issues);
+        return null;
+      }
+
+      console.error('Error generating character gallery:', error);
+      return null;
     }
   }
 }

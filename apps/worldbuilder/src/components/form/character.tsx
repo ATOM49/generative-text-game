@@ -3,7 +3,7 @@ import { ZodProvider } from '@autoform/zod';
 import { AutoForm } from '../ui/autoform';
 import { useApiMutation, useApiQuery } from '@/hooks/useApiQuery';
 import { Character, CharacterFormSchema, Faction } from '@talespin/schema';
-import { useQueryClient } from '@tanstack/react-query';
+import { QueryKey, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { Label } from '../ui/label';
 import {
@@ -21,6 +21,12 @@ interface CharacterFormComponentProps {
   characterId?: string;
   defaultValues?: Partial<Character>;
   onSuccess?: () => void;
+  mutationResolver?: (context: { worldId: string; characterId?: string }) => {
+    method: 'POST' | 'PUT';
+    path: string | ((values: Partial<Character>) => string);
+  };
+  invalidateQueryKey?: QueryKey;
+  submitLabel?: string;
 }
 
 function CharacterFormComponent({
@@ -28,6 +34,9 @@ function CharacterFormComponent({
   characterId,
   defaultValues,
   onSuccess,
+  mutationResolver,
+  invalidateQueryKey,
+  submitLabel,
 }: CharacterFormComponentProps) {
   const queryClient = useQueryClient();
   const schemaProvider = new ZodProvider(CharacterFormSchema);
@@ -63,17 +72,29 @@ function CharacterFormComponent({
     }
   }, [defaultValues]);
 
+  const resolvedMutation = (
+    mutationResolver ??
+    ((ctx: { worldId: string; characterId?: string }) => ({
+      method: ctx.characterId ? 'PUT' : 'POST',
+      path: ctx.characterId
+        ? () => `/api/worlds/${ctx.worldId}/characters/${ctx.characterId}`
+        : `/api/worlds/${ctx.worldId}/characters`,
+    }))
+  )({ worldId, characterId });
+
   const mutation = useApiMutation<Character, Partial<Character>>(
-    characterId ? 'PUT' : 'POST',
-    characterId
-      ? () => `/api/worlds/${worldId}/characters/${characterId}`
-      : `/api/worlds/${worldId}/characters`,
+    resolvedMutation.method,
+    resolvedMutation.path,
     undefined,
     {
       onSuccess: () => {
-        queryClient.invalidateQueries({
-          queryKey: [`/api/worlds/${worldId}/characters`],
-        });
+        if (invalidateQueryKey) {
+          queryClient.invalidateQueries({ queryKey: invalidateQueryKey });
+        } else {
+          queryClient.invalidateQueries({
+            queryKey: [`/api/worlds/${worldId}/characters`],
+          });
+        }
         onSuccess?.();
       },
     },
@@ -96,6 +117,7 @@ function CharacterFormComponent({
         delete clone.worldId;
         delete clone.createdAt;
         delete clone.updatedAt;
+        delete clone.userId;
         return clone;
       })()
     : undefined;
@@ -207,7 +229,8 @@ function CharacterFormComponent({
           setSelectedArchetypeIds,
         )}
         <Button type="submit" disabled={mutation.isLoading}>
-          {characterId ? 'Update Character' : 'Create Character'}
+          {submitLabel ||
+            (characterId ? 'Update Character' : 'Create Character')}
         </Button>
       </AutoForm>
     </div>

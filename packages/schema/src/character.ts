@@ -1,6 +1,54 @@
 import { z } from 'zod';
 import { Id } from './common';
 
+export const CharacterGroupSchema = z.object({
+  name: z.string().min(1),
+  summary: z.string().optional(),
+});
+
+export const CharacterImageRequestSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  biography: z.string().optional(),
+  factions: z.array(CharacterGroupSchema).default([]),
+  cultures: z.array(CharacterGroupSchema).default([]),
+  species: z.array(CharacterGroupSchema).default([]),
+  archetypes: z.array(CharacterGroupSchema).default([]),
+  traits: z.array(z.string()).default([]),
+  promptHint: z.string().optional(),
+});
+
+export const CharacterGalleryImageSchema = z
+  .object({
+    angle: z
+      .string()
+      .min(1)
+      .describe('Label for the camera angle such as front, rear, or profile.'),
+    description: z
+      .string()
+      .optional()
+      .describe(
+        'Short summary of the pose, wardrobe focus, or lighting for this shot.',
+      ),
+    imageUrl: z
+      .string()
+      .url()
+      .describe('CDN URL for this render of the character.'),
+    revisedPrompt: z
+      .string()
+      .optional()
+      .describe(
+        'Model-authored prompt returned by the generator, useful for reruns.',
+      ),
+  })
+  .describe('Single render inside a multi-angle character concept sheet.');
+
+export const CharacterGallerySchema = z
+  .array(CharacterGalleryImageSchema)
+  .describe(
+    'Ordered list of multi-angle renders that make up the character gallery.',
+  );
+
 export const CharacterDescriptorSchema = z
   .object({
     label: z
@@ -47,6 +95,9 @@ export const CharacterBaseSchema = z.object({
     .url()
     .optional()
     .describe('AI generated portrait stored on the CDN.'),
+  gallery: CharacterGallerySchema.default([]).describe(
+    'Multi-angle renders for the character concept sheet ordered as generated.',
+  ),
   promptHint: z
     .string()
     .optional()
@@ -89,9 +140,17 @@ export const CharacterFormSchema = CharacterBaseSchema;
 export const CharacterSchema = CharacterBaseSchema.extend({
   _id: Id,
   worldId: Id,
+  userId: Id.optional().describe(
+    'Owner user id for player-controlled characters.',
+  ),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
 
 export type Character = z.infer<typeof CharacterSchema>;
 export type CharacterForm = z.infer<typeof CharacterFormSchema>;
+export type CharacterGalleryImage = z.infer<typeof CharacterGalleryImageSchema>;
+export type CharacterGroup = z.infer<typeof CharacterGroupSchema>;
+export type CharacterImageRequestInput = z.infer<
+  typeof CharacterImageRequestSchema
+>;

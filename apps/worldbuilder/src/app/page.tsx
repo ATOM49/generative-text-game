@@ -1,32 +1,24 @@
 'use client';
+
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
-  DialogTrigger,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { World } from '@talespin/schema';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from '@/components/ui/card';
-import Link from 'next/link';
 import { useApiQuery } from '@/hooks/useApiQuery';
 import WorldFormComponent from '@/components/form/world';
 import { PaginatedResponse } from '@/lib/api/types';
-import { withHeader } from '@/components/withHeader';
 import { useSession } from 'next-auth/react';
 import { Spinner } from '@/components/ui/spinner';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ROLE_LABELS, isBuilder } from '@/lib/auth/roles';
-import { UserMenu } from '@/components/auth/user-menu';
 import { useRouter } from 'next/navigation';
+import { AppHeader } from '@/components/app-header';
+import { Sparkles } from 'lucide-react';
+import { WorldsGrid } from '@/components/worlds-grid';
 
 export default function WorldsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -69,46 +61,54 @@ export default function WorldsPage() {
     }
 
     return (
-      <>
-        <div className="max-w-xs">
-          <UserMenu />
-        </div>
-        {!canCreateWorld && (
-          <Alert>
-            <AlertTitle>Explorer access</AlertTitle>
-            <AlertDescription>
-              You can browse existing worlds but only builders can create or
-              modify them. You are currently signed in as{' '}
-              {session?.user?.name || roleLabel}.
-            </AlertDescription>
-          </Alert>
-        )}
-        <div className="grid grid-cols-1 gap-6 my-8 md:grid-cols-2 lg:grid-cols-3">
-          {isLoading ? (
-            <div>Loading...</div>
-          ) : (
-            worlds.map((world) => (
-              <Link href={`/worlds/${world._id}`} key={world._id}>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{world.name}</CardTitle>
-                    <CardDescription>{world.theme}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Context Window Limit: {world.contextWindowLimit}
-                    </p>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))
+      <div className="space-y-6 p-6">
+        <div className="flex w-full flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
+              Talespin
+            </p>
+            <h1 className="text-3xl font-bold">World Atlas</h1>
+            <p className="text-muted-foreground mt-2">
+              {canCreateWorld
+                ? 'Forge vivid realms for the Talespin collective—your creations become the stages for every future adventure.'
+                : 'Venture through the Talespin multiverse and bookmark the worlds calling your next heroic chapter.'}
+            </p>
+          </div>
+          {canCreateWorld && (
+            <Button
+              size="sm"
+              className="inline-flex items-center gap-2"
+              onClick={() => setIsDialogOpen(true)}
+            >
+              <Sparkles className="h-4 w-4" />
+              New World
+            </Button>
           )}
         </div>
+        {/* {isAuthenticated && session?.user && (
+          <UserRoleAlert
+            userName={session.user.name}
+            userEmail={session.user.email}
+            roleLabel={roleLabel}
+            canCreateWorld={canCreateWorld}
+          />
+        )} */}
+        <WorldsGrid
+          worlds={worlds}
+          canCreateWorld={canCreateWorld}
+          isLoading={isLoading}
+        />
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      <AppHeader />
+      <main className="flex-1">
+        <Content />
         {canCreateWorld && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>Create World</Button>
-            </DialogTrigger>
             <DialogContent showCloseButton>
               <DialogHeader>
                 <DialogTitle>Create a New World</DialogTitle>
@@ -117,10 +117,7 @@ export default function WorldsPage() {
             </DialogContent>
           </Dialog>
         )}
-      </>
-    );
-  };
-
-  const Page = withHeader(Content);
-  return <Page header="Worlds" subheader="Browse all available worlds here." />;
+      </main>
+    </div>
+  );
 }

@@ -207,10 +207,12 @@ model Faction {
 model Character {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   worldId      String   @db.ObjectId
+  userId       String?  @db.ObjectId
   name         String
   description  String?
   biography    String?
   previewUrl   String?
+  gallery      Json?
   promptHint   String?
   traits       String[] @default([])
   factionIds   String[] @default([]) @db.ObjectId
@@ -223,6 +225,7 @@ model Character {
 
   @@index([worldId])
   @@index([worldId, name])
+  @@index([worldId, userId])
 }
 
 /**

@@ -25,17 +25,52 @@ export function useFabricGrid({
 
   const config = useGridStore((state: GridState) => state.config);
   const worldImageUrl = useGridStore((state: GridState) => state.worldImageUrl);
+  const imageDimensions = useGridStore(
+    (state: GridState) => state.imageDimensions,
+  );
   const selectedCells = useGridStore((state: GridState) => state.selectedCells);
   const toggleCell = useGridStore((state: GridState) => state.toggleCell);
   const setSelectedCells = useGridStore(
     (state: GridState) => state.setSelectedCells,
   );
   const setRegion = useGridStore((state: GridState) => state.setRegion);
+  const setImageDimensions = useGridStore(
+    (state: GridState) => state.setImageDimensions,
+  );
 
   const [canvasSize, setCanvasSize] = useState<CanvasSize>({
     width: config.width,
     height: config.height,
   });
+  const backgroundImageRef = useRef<FabricImage | null>(null);
+
+  const fitBackgroundToCanvas = useCallback(() => {
+    const canvas = fabricRef.current;
+    const background = backgroundImageRef.current;
+    const imageSize = imageDimensions;
+
+    if (!canvas || !background || !imageSize) {
+      return;
+    }
+
+    const { width: imageWidth, height: imageHeight } = imageSize;
+    const scale = Math.min(
+      canvasSize.width / imageWidth,
+      canvasSize.height / imageHeight,
+    );
+
+    background.set({
+      scaleX: scale,
+      scaleY: scale,
+      left: (canvasSize.width - imageWidth * scale) / 2,
+      top: (canvasSize.height - imageHeight * scale) / 2,
+      originX: 'left',
+      originY: 'top',
+    });
+    background.setCoords();
+    canvas.backgroundImage = background;
+    canvas.requestRenderAll();
+  }, [canvasSize.height, canvasSize.width, imageDimensions]);
 
   useEffect(() => {
     setCanvasSize({ width: config.width, height: config.height });
@@ -187,6 +222,8 @@ export function useFabricGrid({
     if (!canvas) return;
     if (!worldImageUrl) {
       canvas.backgroundImage = undefined;
+      backgroundImageRef.current = null;
+      setImageDimensions(undefined);
       canvas.requestRenderAll();
       return;
     }
@@ -197,22 +234,16 @@ export function useFabricGrid({
 
     img.onload = () => {
       if (disposed || !fabricRef.current) return;
+
+      const imageSize = { width: img.width, height: img.height };
+      setImageDimensions(imageSize);
+
       const background = new FabricImage(img, {
         selectable: false,
         evented: false,
       });
 
-      const scaleX = canvasSize.width / img.width;
-      const scaleY = canvasSize.height / img.height;
-      const scale = Math.min(scaleX, scaleY);
-      background.scale(scale);
-      background.set({
-        left: (canvasSize.width - img.width * scale) / 2,
-        top: (canvasSize.height - img.height * scale) / 2,
-      });
-
-      canvas.backgroundImage = background;
-      canvas.requestRenderAll();
+      backgroundImageRef.current = background;
     };
 
     img.onerror = () => {
@@ -224,7 +255,11 @@ export function useFabricGrid({
     return () => {
       disposed = true;
     };
-  }, [canvasSize.height, canvasSize.width, onBackgroundError, worldImageUrl]);
+  }, [onBackgroundError, setImageDimensions, worldImageUrl]);
+
+  useEffect(() => {
+    fitBackgroundToCanvas();
+  }, [fitBackgroundToCanvas]);
 
   useEffect(() => {
     const canvas = fabricRef.current;
@@ -232,28 +267,70 @@ export function useFabricGrid({
     if (!canvasRef.current?.parentElement) return;
 
     const container = canvasRef.current.parentElement;
+    if (!container) return;
+
+    const applyContainerSize = (width: number, height: number) => {
+      setCanvasSize((prev) => {
+        if (
+          Math.abs(prev.width - width) < 0.5 &&
+          Math.abs(prev.height - height) < 0.5
+        ) {
+          return prev;
+        }
+        return { width, height };
+      });
+    };
+
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
       const containerWidth = entry.contentRect.width;
-      if (!containerWidth) return;
-      const aspect = config.height / config.width || 0.75;
-      const nextHeight = containerWidth * aspect;
-      setCanvasSize((prev) => {
-        if (
-          Math.abs(prev.width - containerWidth) < 0.5 &&
-          Math.abs(prev.height - nextHeight) < 0.5
-        ) {
-          return prev;
+      const containerHeight = entry.contentRect.height;
+      if (!containerWidth || !containerHeight) return;
+
+      // Use actual image aspect ratio if available, otherwise fall back to grid aspect
+      const actualAspect = imageDimensions
+        ? imageDimensions.height / imageDimensions.width
+        : config.height / config.width || 0.75;
+
+      let nextWidth: number;
+      let nextHeight: number;
+
+      // Determine if image is landscape or portrait and fit accordingly
+      // actualAspect = height/width, so > 1 means portrait, < 1 means landscape
+      if (actualAspect > 1) {
+        // Portrait image: fit to height
+        nextHeight = containerHeight;
+        nextWidth = containerHeight / actualAspect;
+
+        // If width exceeds container, fit to width instead
+        if (nextWidth > containerWidth) {
+          nextWidth = containerWidth;
+          nextHeight = containerWidth * actualAspect;
         }
-        return { width: containerWidth, height: nextHeight };
-      });
+      } else {
+        // Landscape image: fit to width
+        nextWidth = containerWidth;
+        nextHeight = containerWidth * actualAspect;
+
+        // If height exceeds container, fit to height instead
+        if (nextHeight > containerHeight) {
+          nextHeight = containerHeight;
+          nextWidth = containerHeight / actualAspect;
+        }
+      }
+
+      applyContainerSize(nextWidth, nextHeight);
     });
 
     observer.observe(container);
+    const containerRect = container.getBoundingClientRect();
+    if (containerRect.width && containerRect.height) {
+      applyContainerSize(containerRect.width, containerRect.height);
+    }
 
     return () => observer.disconnect();
-  }, [config.height, config.width]);
+  }, [config.height, config.width, imageDimensions]);
 
   useEffect(() => {
     const canvas = fabricRef.current;

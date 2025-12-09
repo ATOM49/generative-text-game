@@ -11,11 +11,13 @@ import { buildGridDocument } from '@/utils/mongoSchemas';
 export interface GridState {
   config: GridConfig;
   worldImageUrl?: string;
+  imageDimensions?: { width: number; height: number };
   selectedCells: GridCellMetadata[];
   region?: RegionSelection;
   interactionMode: 'grid' | 'location';
   setConfig: (cfg: Partial<GridConfig>) => void;
   setWorldImage: (url?: string) => void;
+  setImageDimensions: (dimensions?: { width: number; height: number }) => void;
   setInteractionMode: (mode: 'grid' | 'location') => void;
   toggleCell: (cell: GridCellMetadata) => void;
   setSelectedCells: (cells: GridCellMetadata[]) => void;
@@ -43,12 +45,16 @@ const storeCreator: StateCreator<GridState, [], []> = (set, get) => ({
   selectedCells: [],
   region: undefined,
   worldImageUrl: undefined,
+  imageDimensions: undefined,
   interactionMode: 'grid',
 
   setConfig: (cfg: Partial<GridConfig>) =>
     set((state: GridState) => ({ config: { ...state.config, ...cfg } })),
 
   setWorldImage: (url?: string) => set({ worldImageUrl: url }),
+
+  setImageDimensions: (dimensions?: { width: number; height: number }) =>
+    set({ imageDimensions: dimensions }),
 
   setInteractionMode: (mode: 'grid' | 'location') =>
     set({ interactionMode: mode }),
@@ -83,7 +89,7 @@ const storeCreator: StateCreator<GridState, [], []> = (set, get) => ({
     set({ region: { startCell: start, endCell: end } }),
 
   serializeForMongo: () => {
-    const { selectedCells, config, worldImageUrl } = get();
+    const { selectedCells, config, worldImageUrl, imageDimensions } = get();
     return buildGridDocument({
       width: config.width,
       height: config.height,

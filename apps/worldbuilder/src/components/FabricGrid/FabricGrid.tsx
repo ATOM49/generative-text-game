@@ -23,8 +23,17 @@ export function FabricGrid({
   }, [fabricRef, isReady, onReady]);
 
   return (
-    <div className={cn('relative h-full w-full', className)} style={style}>
-      <canvas ref={canvasRef} className="h-full w-full" />
+    <div
+      className={cn(
+        'relative h-full w-full flex items-center justify-center',
+        className,
+      )}
+      style={style}
+    >
+      <canvas
+        ref={canvasRef}
+        style={{ width: '100%', height: '100%', display: 'block' }}
+      />
     </div>
   );
 }

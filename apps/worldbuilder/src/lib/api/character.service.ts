@@ -3,24 +3,25 @@ import {
   Character,
   CharacterForm,
   CharacterFormSchema,
+  CharacterGallerySchema,
   CharacterMetaSchema,
+  CharacterImageRequestSchema,
+  type CharacterImageRequestInput,
 } from '@talespin/schema';
 import { ApiError } from './errors';
 import { CharacterQueryParams, CharacterQueryParamsSchema } from './types';
-import {
-  CharacterImageRequestSchema,
-  CharacterImageRequestInput,
-  ImageGenerationService,
-} from './ai-image.service';
+import { ImageGenerationService } from './ai-image.service';
 
 const characterSelect = {
   select: {
     id: true,
     worldId: true,
+    userId: true,
     name: true,
     description: true,
     biography: true,
     previewUrl: true,
+    gallery: true,
     promptHint: true,
     traits: true,
     factionIds: true,
@@ -111,19 +112,26 @@ export class CharacterService {
   async createCharacter(
     worldId: string,
     data: CharacterForm,
+    userId: string,
   ): Promise<Character> {
     const validated = CharacterFormSchema.parse(data);
 
-    const previewUrl =
-      validated.previewUrl || (await this.generatePortrait(worldId, validated));
+    const media = await this.buildCharacterMedia({
+      worldId,
+      form: validated,
+    });
 
     const character = await this.prisma.character.create({
       data: {
         worldId,
+        userId,
         name: validated.name,
         description: validated.description || null,
         biography: validated.biography || null,
-        previewUrl: previewUrl || null,
+        previewUrl: media.previewUrl || null,
+        gallery: media.gallery.length
+          ? (media.gallery as Prisma.InputJsonValue)
+          : null,
         promptHint: validated.promptHint || null,
         traits: validated.traits,
         factionIds: validated.factionIds,
@@ -131,6 +139,78 @@ export class CharacterService {
         speciesIds: validated.speciesIds,
         archetypeIds: validated.archetypeIds,
         meta: (validated.meta as Prisma.InputJsonValue) || null,
+      },
+      select: characterSelect.select,
+    });
+
+    return this.mapCharacterToDto(character);
+  }
+
+  async getPlayerCharacter(
+    worldId: string,
+    userId: string,
+  ): Promise<Character | null> {
+    const character = await this.prisma.character.findFirst({
+      where: { worldId, userId },
+      select: characterSelect.select,
+    });
+
+    if (!character) {
+      return null;
+    }
+
+    return this.mapCharacterToDto(character);
+  }
+
+  async upsertPlayerCharacter(
+    worldId: string,
+    userId: string,
+    data: CharacterForm,
+  ): Promise<Character> {
+    const validated = CharacterFormSchema.parse(data);
+
+    const existing = await this.prisma.character.findFirst({
+      where: { worldId, userId },
+      select: { id: true, previewUrl: true, gallery: true },
+    });
+
+    const media = await this.buildCharacterMedia({
+      worldId,
+      form: validated,
+      existing: existing ?? undefined,
+    });
+
+    const payload = {
+      name: validated.name,
+      description: validated.description || null,
+      biography: validated.biography || null,
+      previewUrl: media.previewUrl || null,
+      gallery: media.gallery.length
+        ? (media.gallery as Prisma.InputJsonValue)
+        : null,
+      promptHint: validated.promptHint || null,
+      traits: validated.traits,
+      factionIds: validated.factionIds,
+      cultureIds: validated.cultureIds,
+      speciesIds: validated.speciesIds,
+      archetypeIds: validated.archetypeIds,
+      meta: (validated.meta as Prisma.InputJsonValue) || null,
+    } satisfies Prisma.CharacterUpdateInput;
+
+    if (existing) {
+      const character = await this.prisma.character.update({
+        where: { id: existing.id },
+        data: payload,
+        select: characterSelect.select,
+      });
+      return this.mapCharacterToDto(character);
+    }
+
+    const character = await this.prisma.character.create({
+      data: {
+        worldId,
+        userId,
+        ...payload,
       },
       select: characterSelect.select,
     });
@@ -147,17 +227,18 @@ export class CharacterService {
 
     const existing = await this.prisma.character.findUnique({
       where: { id },
-      select: { worldId: true, previewUrl: true },
+      select: { worldId: true, previewUrl: true, gallery: true },
     });
 
     if (!existing || existing.worldId !== worldId) {
       throw new ApiError(404, 'Character not found');
     }
 
-    const previewUrl =
-      validated.previewUrl ??
-      existing.previewUrl ??
-      (await this.generatePortrait(worldId, validated));
+    const media = await this.buildCharacterMedia({
+      worldId,
+      form: validated,
+      existing,
+    });
 
     const character = await this.prisma.character.update({
       where: { id },
@@ -165,7 +246,10 @@ export class CharacterService {
         name: validated.name,
         description: validated.description || null,
         biography: validated.biography || null,
-        previewUrl: previewUrl || null,
+        previewUrl: media.previewUrl || null,
+        gallery: media.gallery.length
+          ? (media.gallery as Prisma.InputJsonValue)
+          : null,
         promptHint: validated.promptHint || null,
         traits: validated.traits,
         factionIds: validated.factionIds,
@@ -201,10 +285,12 @@ export class CharacterService {
     return {
       _id: character.id,
       worldId: character.worldId,
+      userId: character.userId || undefined,
       name: character.name,
       description: character.description || undefined,
       biography: character.biography || undefined,
       previewUrl: character.previewUrl || undefined,
+      gallery: this.parseGallery(character.gallery),
       promptHint: character.promptHint || undefined,
       traits: character.traits || [],
       factionIds: character.factionIds || [],
@@ -217,10 +303,10 @@ export class CharacterService {
     };
   }
 
-  private async generatePortrait(
+  private async generateConceptGallery(
     worldId: string,
     data: CharacterForm,
-  ): Promise<string | null> {
+  ): Promise<Character['gallery'] | null> {
     if (!data.description && !data.biography && data.traits.length === 0) {
       const hasAssociations =
         data.factionIds.length > 0 ||
@@ -240,15 +326,51 @@ export class CharacterService {
     }
 
     try {
-      return await new ImageGenerationService().generateImageUrl(
-        '/generate/character',
-        payload,
-        CharacterImageRequestSchema,
-      );
+      const service = new ImageGenerationService();
+      const gallery = await service.generateCharacterGallery(payload);
+      console.log({ gallery });
+
+      if (gallery && gallery.length > 0) {
+        return gallery;
+      }
+
+      return null;
     } catch (error) {
-      console.error('Failed to generate character portrait:', error);
+      console.error('Failed to generate character gallery:', error);
       return null;
     }
+  }
+
+  private parseGallery(value: Prisma.JsonValue | null | undefined) {
+    const parsed = CharacterGallerySchema.safeParse(value ?? []);
+    return parsed.success ? parsed.data : [];
+  }
+
+  private async buildCharacterMedia({
+    worldId,
+    form,
+    existing,
+  }: {
+    worldId: string;
+    form: CharacterForm;
+    existing?: { previewUrl: string | null; gallery: Prisma.JsonValue | null };
+  }): Promise<{ gallery: Character['gallery']; previewUrl: string | null }> {
+    const providedGallery = form.gallery ?? [];
+    const hasProvidedGallery = providedGallery.length > 0;
+    const persistedGallery = existing
+      ? this.parseGallery(existing.gallery)
+      : [];
+
+    let gallery = hasProvidedGallery ? providedGallery : persistedGallery;
+
+    if (!gallery.length) {
+      gallery = (await this.generateConceptGallery(worldId, form)) ?? [];
+    }
+
+    const previewUrl =
+      form.previewUrl ?? gallery[0]?.imageUrl ?? existing?.previewUrl ?? null;
+
+    return { gallery, previewUrl };
   }
 
   private async buildImagePayload(

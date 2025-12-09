@@ -1,10 +1,13 @@
 import { FastifyPluginAsync } from 'fastify';
-import { characterPromptTemplate } from '../../prompts/generate-character.js';
+import { CharacterGalleryImageSchema } from '@talespin/schema';
+import { z } from 'zod';
+import { createCharacterGalleryChain } from '../../chains/generateCharacterGallery.js';
+import { characterPromptTemplate } from '../../prompts/characterPrompt.js';
+import { CharacterImageRequestSchema } from '@talespin/schema';
 
-type CharacterGroup = {
-  name: string;
-  summary?: string;
-};
+type CharacterGroup = z.infer<
+  typeof CharacterImageRequestSchema
+>['factions'][number];
 
 interface CharacterImageRequestBody {
   name: string;
@@ -18,9 +21,12 @@ interface CharacterImageRequestBody {
   promptHint?: string;
 }
 
+type CharacterGalleryImage = z.infer<typeof CharacterGalleryImageSchema>;
+
 interface CharacterImageResponse {
   imageUrl: string;
   revisedPrompt?: string;
+  images: CharacterGalleryImage[];
 }
 
 interface ErrorResponse {
@@ -41,6 +47,14 @@ const formatList = (items?: string[]) => {
   if (!items || items.length === 0) return 'None provided';
   return items.join(', ');
 };
+
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '') || 'character';
 
 const generateCharacter: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
@@ -114,8 +128,21 @@ const generateCharacter: FastifyPluginAsync = async (fastify) => {
             properties: {
               imageUrl: { type: 'string' },
               revisedPrompt: { type: 'string' },
+              images: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    angle: { type: 'string' },
+                    description: { type: 'string' },
+                    imageUrl: { type: 'string' },
+                    revisedPrompt: { type: 'string' },
+                  },
+                  required: ['angle', 'imageUrl'],
+                },
+              },
             },
-            required: ['imageUrl'],
+            required: ['imageUrl', 'images'],
           },
           400: {
             type: 'object',
@@ -140,14 +167,6 @@ const generateCharacter: FastifyPluginAsync = async (fastify) => {
       const startTime = Date.now();
 
       try {
-        if (!process.env.OPENAI_API_KEY) {
-          fastify.log.error('OPENAI_API_KEY is not configured');
-          return reply.status(500).send({
-            error: 'Service configuration error',
-            details: 'Image generation service is not properly configured',
-          });
-        }
-
         const { name } = req.body;
         if (!name?.trim()) {
           return reply.status(400).send({
@@ -164,7 +183,7 @@ const generateCharacter: FastifyPluginAsync = async (fastify) => {
         const archetypesText = formatGroups(req.body.archetypes);
         const traitsText = formatList(req.body.traits);
 
-        const prompt = await characterPromptTemplate.format({
+        const characterBrief = await characterPromptTemplate.format({
           name,
           description: req.body.description ?? '–',
           biography: req.body.biography ?? '–',
@@ -173,76 +192,38 @@ const generateCharacter: FastifyPluginAsync = async (fastify) => {
           archetypes: archetypesText,
           traits: traitsText,
           promptHint:
-            req.body.promptHint ?? 'Use painterly realism. No text overlay.',
+            req.body.promptHint ?? 'Use 8-bit style art. No text overlay.',
         });
 
-        let imageUrl: string;
-        let revisedPrompt: string | undefined;
+        const slug = slugify(name);
 
-        try {
-          const slug = name
-            .toLowerCase()
-            .replace(/\s+/g, '-')
-            .replace(/[^a-z0-9-]/g, '');
+        const galleryChain = createCharacterGalleryChain(fastify);
 
-          const result = await fastify.imageGen.generateImageToCdn({
-            prompt,
-            keyPrefix: `characters/${slug}/`,
-          });
-          imageUrl = result.url;
-          revisedPrompt = result.revisedPrompt;
-        } catch (openaiError) {
-          fastify.log.error({
-            msg: 'OpenAI API error while generating character portrait',
-            error: openaiError,
-          });
+        const result = await galleryChain.invoke({
+          characterBrief,
+          slug,
+        });
 
-          if (openaiError instanceof Error) {
-            if (openaiError.message.includes('rate limit')) {
-              return reply.status(429).send({
-                error: 'Rate limit exceeded',
-                details: 'Too many requests to image generation service',
-              });
-            }
-            if (openaiError.message.includes('timeout')) {
-              return reply.status(504).send({
-                error: 'Request timeout',
-                details: 'Image generation took too long',
-              });
-            }
-            if (
-              openaiError.message.includes('content policy') ||
-              openaiError.message.includes('safety')
-            ) {
-              return reply.status(400).send({
-                error: 'Content policy violation',
-                details: 'The provided content was rejected by safety filters',
-              });
-            }
-          }
-
-          throw openaiError;
-        }
+        const images = result.images;
+        const imageUrl = images[0]?.imageUrl;
+        const revisedPrompt = images[0]?.revisedPrompt;
 
         if (!imageUrl) {
-          fastify.log.error({
-            msg: 'Invalid image URL received from portrait generation',
-            imageUrl,
-          });
           return reply.status(500).send({
             error: 'Invalid response from image generation service',
-            details: 'No valid portrait URL was generated',
+            details: 'No valid image URL was present in the gallery',
           });
         }
 
         const duration = Date.now() - startTime;
         fastify.log.info({
-          msg: 'Character portrait generated',
+          msg: 'Character gallery generated',
           duration,
-          imageUrl,
+          coverImage: imageUrl,
+          imageCount: images.length,
         });
 
-        return reply.send({ imageUrl, revisedPrompt });
+        return reply.send({ imageUrl, revisedPrompt, images });
       } catch (error) {
         const duration = Date.now() - startTime;
         fastify.log.error({

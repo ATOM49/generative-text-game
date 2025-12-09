@@ -7,13 +7,12 @@ import {
   Circle as FabricCircle,
   type TPointerEventInfo,
 } from 'fabric';
-import { MapPin } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { FabricGrid } from '@/components/FabricGrid/FabricGrid';
 import type { GridCellMetadata } from '@/components/FabricGrid/types';
 import { useGridStore, type GridState } from '@/state/useGridStore';
-
-type Tool = 'select' | 'location';
+import { useGridSync } from '@/components/map-common/useGridSync';
+import { Drawer, DrawerContent } from '@/components/ui/drawer';
+import { MapToolbox, type Tool } from '@/components/map-toolbox';
 
 interface RelativeShape {
   id: string;
@@ -21,42 +20,42 @@ interface RelativeShape {
   points: TRelCoord[];
 }
 
-interface MapGridData {
-  grid: Pick<WorldGrid, 'width' | 'height'>;
-  cells: GridCell[];
-}
-
-interface MapEditorProps {
+interface MapEditorWithToolbarProps {
   imageUrl: string;
-  grid?: MapGridData;
+  grid?: {
+    grid: Pick<WorldGrid, 'width' | 'height'>;
+    cells: GridCell[];
+  };
   activeCellId?: string | null;
+  onCellClick?: (cell: GridCell) => void;
   onCellSelected?: (cell: GridCell | null) => void;
   onCellsSelected?: (cells: GridCell[]) => void;
   onLocationCreated?: (
     coordRel: { u: number; v: number },
     cell?: GridCell,
   ) => void;
-  canEdit?: boolean;
+  renderCellDetails?: (cell: GridCell, onClose: () => void) => React.ReactNode;
 }
 
 const DEFAULT_CANVAS_WIDTH = 1024;
 
-export default function MapEditor({
+export function MapEditorWithToolbar({
   imageUrl,
   grid,
   activeCellId,
+  onCellClick,
   onCellSelected,
   onCellsSelected,
   onLocationCreated,
-  canEdit = true,
-}: MapEditorProps) {
+  renderCellDetails,
+}: MapEditorWithToolbarProps) {
   const [tool, setTool] = useState<Tool>('select');
-  const [imageError, setImageError] = useState<string | null>(null);
   const [shapes, setShapes] = useState<RelativeShape[]>([]);
   const fabricCanvasRef = useRef<FabricCanvas | null>(null);
   const shapeObjectsRef = useRef<Record<string, FabricCircle>>({});
 
   const config = useGridStore((state: GridState) => state.config);
+  const worldImageUrl = useGridStore((state: GridState) => state.worldImageUrl);
   const setConfig = useGridStore((state: GridState) => state.setConfig);
   const setWorldImage = useGridStore((state: GridState) => state.setWorldImage);
   const setSelectedCells = useGridStore(
@@ -72,32 +71,22 @@ export default function MapEditor({
     (state: GridState) => state.setInteractionMode,
   );
 
-  useEffect(() => {
-    setWorldImage(imageUrl);
-    setImageError(null);
-  }, [imageUrl, setWorldImage]);
+  const {
+    handleGridSelection: hookHandleGridSelection,
+    handleCanvasReady: hookHandleCanvasReady,
+  } = useGridSync({
+    imageUrl,
+    grid,
+    activeCellId,
+    onCellClick,
+    onCellSelected,
+    onCellsSelected,
+  });
 
   useEffect(() => {
-    if (!grid) return;
-    const aspectRatio = grid.grid.height / grid.grid.width || 0.75;
-    setConfig({
-      cellsX: grid.grid.width,
-      cellsY: grid.grid.height,
-      width: DEFAULT_CANVAS_WIDTH,
-      height: Math.round(DEFAULT_CANVAS_WIDTH * aspectRatio),
-    });
-  }, [grid, setConfig]);
-
-  useEffect(() => {
-    if (!canEdit) {
-      setTool('select');
-    }
-  }, [canEdit]);
-
-  useEffect(() => {
-    const mode = canEdit && tool === 'location' ? 'location' : 'grid';
+    const mode = tool === 'location' ? 'location' : 'grid';
     setInteractionMode(mode);
-  }, [setInteractionMode, tool, canEdit]);
+  }, [setInteractionMode, tool]);
 
   const resolveCellFromRelative = useCallback(
     (point: TRelCoord): GridCell | undefined => {
@@ -117,52 +106,7 @@ export default function MapEditor({
     [grid],
   );
 
-  const handleGridSelection = useCallback(
-    (metas: GridCellMetadata[]) => {
-      if (!grid) {
-        onCellSelected?.(null);
-        onCellsSelected?.([]);
-        return;
-      }
-
-      const resolved = metas
-        .map((meta) =>
-          grid.cells.find(
-            (cell) => cell.x === meta.cellX && cell.y === meta.cellY,
-          ),
-        )
-        .filter(Boolean) as GridCell[];
-
-      if (resolved.length === 0) {
-        onCellSelected?.(null);
-        onCellsSelected?.([]);
-        return;
-      }
-
-      onCellSelected?.(resolved[0]);
-      onCellsSelected?.(resolved);
-    },
-    [grid, onCellSelected, onCellsSelected],
-  );
-
-  useEffect(() => {
-    if (!grid || !activeCellId) {
-      clearSelection();
-      return;
-    }
-
-    const target = grid.cells.find((cell) => cell._id === activeCellId);
-    if (!target) return;
-
-    setSelectedCells([
-      {
-        cellX: target.x,
-        cellY: target.y,
-        index: target.y * grid.grid.width + target.x,
-        selected: true,
-      },
-    ]);
-  }, [activeCellId, clearSelection, grid, setSelectedCells]);
+  const handleGridSelection = hookHandleGridSelection;
 
   const toRelative = useCallback(
     (point: { x: number; y: number }): TRelCoord => {
@@ -217,17 +161,17 @@ export default function MapEditor({
 
   const handleCanvasReady = useCallback(
     (canvas: FabricCanvas | null) => {
-      fabricCanvasRef.current = canvas;
+      hookHandleCanvasReady(canvas);
       if (canvas) {
         redrawShapes();
       }
     },
-    [redrawShapes],
+    [hookHandleCanvasReady, redrawShapes],
   );
 
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas || !canEdit) return;
+    if (!canvas) return;
 
     const handleLocationClick = (event: TPointerEventInfo) => {
       if (tool !== 'location') return;
@@ -275,7 +219,6 @@ export default function MapEditor({
     resolveCellFromRelative,
     toRelative,
     tool,
-    canEdit,
   ]);
 
   const handleSerialize = useCallback(() => {
@@ -283,64 +226,48 @@ export default function MapEditor({
     console.info('[grid] serialized payload', payload);
   }, [serializeForMongo]);
 
-  const toolbarHint = useMemo(() => {
-    if (!grid) return 'Grid data is not available for this world yet';
-    if (tool === 'location' && canEdit) {
-      return 'Click on the map to drop a location marker';
+  const activeCell = useMemo(() => {
+    if (!activeCellId || !grid) {
+      return null;
     }
-    if (!canEdit) {
-      return 'Explorer role: select cells to inspect them';
+    return grid.cells.find((cell) => cell._id === activeCellId) || null;
+  }, [activeCellId, grid]);
+
+  const handleClearSelection = useCallback(() => {
+    onCellSelected?.(null);
+  }, [onCellSelected]);
+
+  const isDrawerOpen = Boolean(activeCell);
+  const handleDrawerOpenChange = (open: boolean) => {
+    if (!open) {
+      handleClearSelection();
     }
-    return 'Click or drag to select cells';
-  }, [grid, tool, canEdit]);
+  };
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-gray-100">
-      {imageError && (
-        <div className="absolute left-4 right-4 top-20 z-20 rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700">
-          <strong className="font-semibold">Error:</strong> {imageError}
-        </div>
-      )}
-
-      <div className="absolute left-4 top-4 z-10 flex min-w-[280px] flex-col gap-3 rounded bg-white p-4 shadow-lg">
-        <div className="flex flex-wrap items-center gap-2">
-          {canEdit && (
-            <Button
-              variant={tool === 'location' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setTool('location')}
-            >
-              <MapPin className="mr-2 h-4 w-4" />
-              Add Location
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={() => setTool('select')}>
-            Select
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setConfig({ showGrid: !config.showGrid })}
-          >
-            {config.showGrid ? 'Hide Grid' : 'Show Grid'}
-          </Button>
-          {canEdit && (
-            <Button variant="outline" size="sm" onClick={handleSerialize}>
-              Export Grid JSON
-            </Button>
-          )}
-        </div>
-        <span className="text-sm text-muted-foreground">{toolbarHint}</span>
-      </div>
-
-      <div className="h-full w-full">
+    <div className="relative flex h-full w-full overflow-hidden">
+      <div className="flex h-full flex-1 flex-col overflow-hidden bg-gray-100">
         <FabricGrid
           className="h-full w-full"
           onCellSelect={handleGridSelection}
           onReady={handleCanvasReady}
-          onBackgroundError={(error) => setImageError(error.message)}
+          onBackgroundError={(error) =>
+            console.error('Map image error:', error)
+          }
         />
       </div>
+
+      <Drawer
+        open={isDrawerOpen}
+        onOpenChange={handleDrawerOpenChange}
+        direction="right"
+      >
+        <DrawerContent className="w-full max-w-md border-l border-sidebar-border">
+          {activeCell &&
+            renderCellDetails &&
+            renderCellDetails(activeCell, handleClearSelection)}
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }

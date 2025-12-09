@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { ApiError } from '@/lib/api/errors';
+import { ApiError, handleApiError } from '@/lib/api/errors';
 import { GridService } from '@/lib/api/grid.service';
-import { requireUser } from '@/lib/auth/guards';
+import { requireUser, BUILDER_ONLY } from '@/lib/auth/guards';
+import { WorldGridFormSchema } from '@talespin/schema';
 
 const gridService = new GridService(prisma);
 
@@ -16,17 +17,34 @@ export async function GET(
     const payload = await gridService.getWorldGrid(worldId);
     return NextResponse.json(payload);
   } catch (error) {
-    if (error instanceof ApiError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.statusCode },
-      );
-    }
+    return handleApiError(error);
+  }
+}
 
-    console.error('Error fetching world grid:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 },
-    );
+export async function PUT(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  try {
+    await requireUser(BUILDER_ONLY);
+    const { id: worldId } = await context.params;
+    const body = await request.json();
+    const validatedData = WorldGridFormSchema.parse(body);
+
+    // Replace the grid with new dimensions
+    const payload = await gridService.replaceGrid(worldId, {
+      width: validatedData.width,
+      height: validatedData.height,
+      home: validatedData.homeCellId
+        ? undefined
+        : {
+            x: Math.floor(validatedData.width / 2),
+            y: Math.floor(validatedData.height / 2),
+          },
+    });
+
+    return NextResponse.json(payload);
+  } catch (error) {
+    return handleApiError(error);
   }
 }

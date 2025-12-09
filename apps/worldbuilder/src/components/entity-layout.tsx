@@ -14,7 +14,7 @@ interface EntityLayoutProps {
   hideHandle?: boolean;
 }
 
-function EntityLayoutBase({
+export function EntityLayoutBase({
   left,
   right,
   children,
@@ -60,5 +60,4 @@ function EntityLayoutBase({
     </ResizablePanelGroup>
   );
 }
-
 export const EntityLayout = withHeader(EntityLayoutBase);
