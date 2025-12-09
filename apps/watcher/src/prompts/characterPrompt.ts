@@ -22,5 +22,7 @@ Requirements:
 
 - The resulting image prompts will be used to generate single-subject full-body portrait images: explicitly instruct that each image should contain only one instance of the character (no duplicates or additional figures) and use a portrait-oriented composition when possible (taller-than-wide framing).
 
-Respond with an evocative brief of 3-5 sentences that another model can use to plan the individual angles in 8-bit pixel art style.
+- Strictly forbid text: do NOT include any visible text, letters, numbers, words, captions, signage, labels, logos, watermarks, or readable typography anywhere in the image (on clothing, props, tattoos, background, banners, or as overlays). If the image generator supports a negative prompt, include: "no text, no letters, no words, no captions, no watermark".
+
+Respond with an evocative brief of 3-5 sentences that another model can use to plan the individual angles in 8-bit pixel art style. The brief must not request or include any textual elements.
 `);

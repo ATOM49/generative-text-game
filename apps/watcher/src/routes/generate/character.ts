@@ -1,65 +1,31 @@
 import { FastifyPluginAsync } from 'fastify';
-import { CharacterGalleryImageSchema } from '@talespin/schema';
 import { z } from 'zod';
-import { createCharacterGalleryChain } from '../../chains/generateCharacterGallery.js';
-import { characterPromptTemplate } from '../../prompts/characterPrompt.js';
-import { CharacterImageRequestSchema } from '@talespin/schema';
+import {
+  CharacterGallerySchema,
+  CharacterGeneratedDetailsSchema,
+  CharacterProfileRequestSchema,
+  type CharacterProfileRequestInput,
+} from '@talespin/schema';
+import { createGenerateCharacterFunction } from '../../chains/generateCharacter.js';
 
-type CharacterGroup = z.infer<
-  typeof CharacterImageRequestSchema
->['factions'][number];
-
-interface CharacterImageRequestBody {
-  name: string;
-  description?: string;
-  biography?: string;
-  factions?: CharacterGroup[];
-  cultures?: CharacterGroup[];
-  species?: CharacterGroup[];
-  archetypes?: CharacterGroup[];
-  traits?: string[];
-  promptHint?: string;
-}
-
-type CharacterGalleryImage = z.infer<typeof CharacterGalleryImageSchema>;
-
-interface CharacterImageResponse {
-  imageUrl: string;
+type CharacterGenerationResponse = {
+  profile: z.infer<typeof CharacterGeneratedDetailsSchema>;
+  gallery: z.infer<typeof CharacterGallerySchema>;
+  coverImage: string;
   revisedPrompt?: string;
-  images: CharacterGalleryImage[];
-}
+};
 
 interface ErrorResponse {
   error: string;
   details?: string;
 }
 
-const formatGroups = (groups?: CharacterGroup[]) => {
-  if (!groups || groups.length === 0) return 'None provided';
-  return groups
-    .map((group) =>
-      group.summary ? `${group.name}: ${group.summary}` : `${group.name}`,
-    )
-    .join('; ');
-};
-
-const formatList = (items?: string[]) => {
-  if (!items || items.length === 0) return 'None provided';
-  return items.join(', ');
-};
-
-const slugify = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-|-$/g, '') || 'character';
-
 const generateCharacter: FastifyPluginAsync = async (fastify) => {
+  const generateCharacterFlow = createGenerateCharacterFunction(fastify);
+
   fastify.post<{
-    Body: CharacterImageRequestBody;
-    Reply: CharacterImageResponse | ErrorResponse;
+    Body: CharacterProfileRequestInput;
+    Reply: CharacterGenerationResponse | ErrorResponse;
   }>(
     '/',
     {
@@ -69,31 +35,9 @@ const generateCharacter: FastifyPluginAsync = async (fastify) => {
           properties: {
             name: { type: 'string' },
             description: { type: 'string' },
-            biography: { type: 'string' },
-            factions: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  summary: { type: 'string' },
-                },
-                required: ['name'],
-              },
-            },
-            cultures: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  summary: { type: 'string' },
-                },
-                required: ['name'],
-              },
-            },
             species: {
               type: 'array',
+              minItems: 1,
               items: {
                 type: 'object',
                 properties: {
@@ -103,32 +47,46 @@ const generateCharacter: FastifyPluginAsync = async (fastify) => {
                 required: ['name'],
               },
             },
-            archetypes: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  summary: { type: 'string' },
-                },
-                required: ['name'],
-              },
-            },
-            traits: {
-              type: 'array',
-              items: { type: 'string' },
-            },
-            promptHint: { type: 'string' },
           },
-          required: ['name'],
+          required: ['name', 'species'],
         },
         response: {
           200: {
             type: 'object',
             properties: {
-              imageUrl: { type: 'string' },
+              coverImage: { type: 'string' },
               revisedPrompt: { type: 'string' },
-              images: {
+              profile: {
+                type: 'object',
+                properties: {
+                  biography: { type: 'string' },
+                  promptHint: { type: 'string' },
+                  traits: {
+                    type: 'array',
+                    items: { type: 'string' },
+                  },
+                  meta: {
+                    type: 'object',
+                    properties: {
+                      descriptors: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            label: { type: 'string' },
+                            detail: { type: 'string' },
+                          },
+                          required: ['label', 'detail'],
+                        },
+                      },
+                      notes: { type: 'string' },
+                    },
+                    required: ['descriptors'],
+                  },
+                },
+                required: ['biography', 'traits', 'meta'],
+              },
+              gallery: {
                 type: 'array',
                 items: {
                   type: 'object',
@@ -142,7 +100,7 @@ const generateCharacter: FastifyPluginAsync = async (fastify) => {
                 },
               },
             },
-            required: ['imageUrl', 'images'],
+            required: ['profile', 'gallery', 'coverImage'],
           },
           400: {
             type: 'object',
@@ -167,74 +125,51 @@ const generateCharacter: FastifyPluginAsync = async (fastify) => {
       const startTime = Date.now();
 
       try {
-        const { name } = req.body;
-        if (!name?.trim()) {
+        const parsed = CharacterProfileRequestSchema.safeParse(req.body);
+
+        if (!parsed.success) {
           return reply.status(400).send({
-            error: 'Missing required fields',
-            details: 'name is required to build a portrait prompt',
+            error: 'Invalid character payload',
+            details: JSON.stringify(parsed.error.flatten().fieldErrors),
           });
         }
 
-        const factionsText = formatGroups([
-          ...(req.body.factions || []),
-          ...(req.body.cultures || []),
-        ]);
-        const speciesText = formatGroups(req.body.species);
-        const archetypesText = formatGroups(req.body.archetypes);
-        const traitsText = formatList(req.body.traits);
+        const result = await generateCharacterFlow(parsed.data);
+        const coverImage = result.gallery[0]?.imageUrl;
+        const revisedPrompt = result.gallery[0]?.revisedPrompt;
 
-        const characterBrief = await characterPromptTemplate.format({
-          name,
-          description: req.body.description ?? '–',
-          biography: req.body.biography ?? '–',
-          factions: factionsText,
-          species: speciesText,
-          archetypes: archetypesText,
-          traits: traitsText,
-          promptHint:
-            req.body.promptHint ?? 'Use 8-bit style art. No text overlay.',
-        });
-
-        const slug = slugify(name);
-
-        const galleryChain = createCharacterGalleryChain(fastify);
-
-        const result = await galleryChain.invoke({
-          characterBrief,
-          slug,
-        });
-
-        const images = result.images;
-        const imageUrl = images[0]?.imageUrl;
-        const revisedPrompt = images[0]?.revisedPrompt;
-
-        if (!imageUrl) {
+        if (!coverImage) {
           return reply.status(500).send({
             error: 'Invalid response from image generation service',
-            details: 'No valid image URL was present in the gallery',
+            details: 'No primary image was returned by the gallery chain',
           });
         }
 
         const duration = Date.now() - startTime;
         fastify.log.info({
-          msg: 'Character gallery generated',
+          msg: 'Character generated',
           duration,
-          coverImage: imageUrl,
-          imageCount: images.length,
+          coverImage,
+          imageCount: result.gallery.length,
         });
 
-        return reply.send({ imageUrl, revisedPrompt, images });
+        return reply.send({
+          profile: result.profile,
+          gallery: result.gallery,
+          coverImage,
+          revisedPrompt,
+        });
       } catch (error) {
         const duration = Date.now() - startTime;
         fastify.log.error({
-          msg: 'Failed to generate character portrait',
+          msg: 'Failed to generate character',
           duration,
           error: error instanceof Error ? error.message : 'Unknown error',
           stack: error instanceof Error ? error.stack : undefined,
         });
 
         return reply.status(500).send({
-          error: 'Failed to generate character portrait',
+          error: 'Failed to generate character',
           details: error instanceof Error ? error.message : 'Unknown error',
         });
       }

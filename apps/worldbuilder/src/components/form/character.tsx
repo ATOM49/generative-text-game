@@ -6,6 +6,7 @@ import { Character, CharacterFormSchema, Faction } from '@talespin/schema';
 import { QueryKey, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { Label } from '../ui/label';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import {
   Select,
   SelectContent,
@@ -39,7 +40,12 @@ function CharacterFormComponent({
   submitLabel,
 }: CharacterFormComponentProps) {
   const queryClient = useQueryClient();
-  const schemaProvider = new ZodProvider(CharacterFormSchema);
+  const isEditing = Boolean(characterId);
+  const schemaProvider = new ZodProvider(
+    isEditing
+      ? CharacterFormSchema
+      : CharacterFormSchema.pick({ name: true, description: true }),
+  );
 
   // Fetch all factions to populate dropdowns
   const { data: allFactions = [] } = useApiQuery<Faction[]>(
@@ -61,6 +67,10 @@ function CharacterFormComponent({
   const [selectedArchetypeIds, setSelectedArchetypeIds] = useState<string[]>(
     [],
   );
+  const [status, setStatus] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   // Initialize from defaultValues
   useEffect(() => {
@@ -87,7 +97,11 @@ function CharacterFormComponent({
     resolvedMutation.path,
     undefined,
     {
-      onSuccess: () => {
+      onSuccess: (data) => {
+        setStatus({
+          type: 'success',
+          message: `${data.name} ${isEditing ? 'updated' : 'created'} successfully.`,
+        });
         if (invalidateQueryKey) {
           queryClient.invalidateQueries({ queryKey: invalidateQueryKey });
         } else {
@@ -97,17 +111,30 @@ function CharacterFormComponent({
         }
         onSuccess?.();
       },
+      onError: (error) => {
+        setStatus({
+          type: 'error',
+          message:
+            error.message || 'Failed to save character. Please try again.',
+        });
+      },
     },
   );
 
   const handleSubmit = (values: Partial<Character>) => {
-    mutation.mutate({
+    setStatus(null);
+    const payload: Partial<Character> = {
       ...values,
-      factionIds: selectedFactionIds,
-      cultureIds: selectedCultureIds,
       speciesIds: selectedSpeciesIds,
-      archetypeIds: selectedArchetypeIds,
-    });
+    };
+
+    if (isEditing) {
+      payload.factionIds = selectedFactionIds;
+      payload.cultureIds = selectedCultureIds;
+      payload.archetypeIds = selectedArchetypeIds;
+    }
+
+    mutation.mutate(payload);
   };
 
   const sanitizedValues = defaultValues
@@ -121,6 +148,15 @@ function CharacterFormComponent({
         return clone;
       })()
     : undefined;
+
+  const formValues = isEditing
+    ? sanitizedValues
+    : sanitizedValues
+      ? {
+          name: sanitizedValues.name,
+          description: sanitizedValues.description,
+        }
+      : undefined;
 
   const addToSelection = (
     id: string,
@@ -202,32 +238,43 @@ function CharacterFormComponent({
       <AutoForm
         schema={schemaProvider}
         onSubmit={handleSubmit}
-        values={sanitizedValues}
+        values={formValues}
       >
-        {renderMultiSelect(
-          'Factions',
-          factions,
-          selectedFactionIds,
-          setSelectedFactionIds,
+        {status && (
+          <Alert variant={status.type === 'error' ? 'destructive' : 'default'}>
+            <AlertTitle>
+              {status.type === 'error' ? 'Generation failed' : 'All set'}
+            </AlertTitle>
+            <AlertDescription>{status.message}</AlertDescription>
+          </Alert>
         )}
-        {renderMultiSelect(
-          'Cultures',
-          cultures,
-          selectedCultureIds,
-          setSelectedCultureIds,
-        )}
+        {isEditing &&
+          renderMultiSelect(
+            'Factions',
+            factions,
+            selectedFactionIds,
+            setSelectedFactionIds,
+          )}
+        {isEditing &&
+          renderMultiSelect(
+            'Cultures',
+            cultures,
+            selectedCultureIds,
+            setSelectedCultureIds,
+          )}
         {renderMultiSelect(
           'Species',
           species,
           selectedSpeciesIds,
           setSelectedSpeciesIds,
         )}
-        {renderMultiSelect(
-          'Archetypes',
-          archetypes,
-          selectedArchetypeIds,
-          setSelectedArchetypeIds,
-        )}
+        {isEditing &&
+          renderMultiSelect(
+            'Archetypes',
+            archetypes,
+            selectedArchetypeIds,
+            setSelectedArchetypeIds,
+          )}
         <Button type="submit" disabled={mutation.isLoading}>
           {submitLabel ||
             (characterId ? 'Update Character' : 'Create Character')}

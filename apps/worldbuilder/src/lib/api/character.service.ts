@@ -1,11 +1,15 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import { z } from 'zod';
 import {
   Character,
+  CharacterCreationInput,
+  CharacterCreationSchema,
   CharacterForm,
   CharacterFormSchema,
   CharacterGallerySchema,
+  CharacterGeneratedDetailsSchema,
   CharacterMetaSchema,
-  CharacterImageRequestSchema,
+  CharacterProfileRequestSchema,
   type CharacterImageRequestInput,
 } from '@talespin/schema';
 import { ApiError } from './errors';
@@ -34,10 +38,34 @@ const characterSelect = {
   },
 } as const;
 
+const CharacterGenerationResponseSchema = z.object({
+  profile: CharacterGeneratedDetailsSchema,
+  gallery: CharacterGallerySchema,
+});
+
 type PrismaCharacter = Prisma.CharacterGetPayload<typeof characterSelect>;
+type AssociationReference = {
+  id: string;
+  name: string;
+  summary: string | null;
+  description: string | null;
+  category: string;
+};
 
 export class CharacterService {
-  constructor(private prisma: PrismaClient) {}
+  private readonly watcherBaseUrl: string;
+  private readonly generationTimeout: number;
+
+  constructor(
+    private prisma: PrismaClient,
+    options?: { watcherBaseUrl?: string; generationTimeoutMs?: number },
+  ) {
+    this.watcherBaseUrl =
+      options?.watcherBaseUrl ||
+      process.env.WATCHER_API_URL ||
+      'http://localhost:4000';
+    this.generationTimeout = options?.generationTimeoutMs ?? 60000;
+  }
 
   async listCharacters(
     worldId: string,
@@ -111,10 +139,52 @@ export class CharacterService {
 
   async createCharacter(
     worldId: string,
-    data: CharacterForm,
+    data: CharacterCreationInput,
     userId: string,
   ): Promise<Character> {
-    const validated = CharacterFormSchema.parse(data);
+    const minimal = CharacterCreationSchema.parse(data);
+
+    const speciesGroups = await this.resolveSpeciesGroups(
+      worldId,
+      minimal.speciesIds,
+    );
+
+    if (!speciesGroups.length) {
+      throw new ApiError(400, 'Please select at least one valid species');
+    }
+
+    const generation = await this.synthesizeCharacter({
+      name: minimal.name,
+      description: minimal.description,
+      species: speciesGroups,
+    });
+
+    if (!generation) {
+      throw new ApiError(
+        502,
+        'Unable to generate character details. Please try again.',
+      );
+    }
+
+    const { profile, gallery } = generation;
+    const coverImage = gallery[0]?.imageUrl;
+
+    const synthesized: CharacterForm = {
+      name: minimal.name,
+      description: minimal.description,
+      biography: profile.biography,
+      previewUrl: coverImage,
+      gallery,
+      promptHint: profile.promptHint,
+      traits: profile.traits,
+      factionIds: [],
+      cultureIds: [],
+      speciesIds: minimal.speciesIds,
+      archetypeIds: [],
+      meta: profile.meta,
+    };
+
+    const validated = CharacterFormSchema.parse(synthesized);
 
     const media = await this.buildCharacterMedia({
       worldId,
@@ -277,6 +347,44 @@ export class CharacterService {
     await this.prisma.character.delete({ where: { id } });
   }
 
+  private async resolveSpeciesGroups(worldId: string, speciesIds: string[]) {
+    const refs = await this.loadAssociationReferenceMap(worldId, speciesIds);
+
+    return speciesIds
+      .map((id) => refs.get(id))
+      .filter((ref): ref is AssociationReference => Boolean(ref))
+      .filter((ref) => ['species', 'entity'].includes(ref.category))
+      .map((ref) => ({
+        name: ref.name,
+        summary: ref.summary || ref.description || undefined,
+      }));
+  }
+
+  private async loadAssociationReferenceMap(
+    worldId: string,
+    ids: string[],
+  ): Promise<Map<string, AssociationReference>> {
+    if (!ids.length) {
+      return new Map();
+    }
+
+    const records = await this.prisma.faction.findMany({
+      where: {
+        worldId,
+        id: { in: ids },
+      },
+      select: {
+        id: true,
+        name: true,
+        summary: true,
+        description: true,
+        category: true,
+      },
+    });
+
+    return new Map(records.map((ref) => [ref.id, ref]));
+  }
+
   private mapCharacterToDto(character: PrismaCharacter): Character {
     const meta = CharacterMetaSchema.parse(
       character.meta || { descriptors: [] },
@@ -346,6 +454,55 @@ export class CharacterService {
     return parsed.success ? parsed.data : [];
   }
 
+  private async synthesizeCharacter(
+    input: z.input<typeof CharacterProfileRequestSchema>,
+  ) {
+    const payload = CharacterProfileRequestSchema.parse(input);
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.generationTimeout,
+    );
+
+    try {
+      const response = await fetch(
+        `${this.watcherBaseUrl}/generate/character`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        },
+      );
+
+      if (!response.ok) {
+        const details = await response.text();
+        console.error('Character generation failed:', details);
+        return null;
+      }
+
+      const data = await response.json();
+      const parsed = CharacterGenerationResponseSchema.safeParse(data);
+
+      if (!parsed.success) {
+        console.error('Invalid character payload:', parsed.error);
+        return null;
+      }
+
+      return parsed.data;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error('Character generation timed out');
+        return null;
+      }
+
+      console.error('Error generating character:', error);
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   private async buildCharacterMedia({
     worldId,
     form,
@@ -377,35 +534,24 @@ export class CharacterService {
     worldId: string,
     data: CharacterForm,
   ): Promise<CharacterImageRequestInput> {
-    const associationIds = new Set([
-      ...data.factionIds,
-      ...data.cultureIds,
-      ...data.speciesIds,
-      ...data.archetypeIds,
-    ]);
+    const associationIds = Array.from(
+      new Set([
+        ...data.factionIds,
+        ...data.cultureIds,
+        ...data.speciesIds,
+        ...data.archetypeIds,
+      ]),
+    );
 
-    const references = associationIds.size
-      ? await this.prisma.faction.findMany({
-          where: {
-            worldId,
-            id: { in: Array.from(associationIds) },
-          },
-          select: {
-            id: true,
-            name: true,
-            summary: true,
-            description: true,
-            category: true,
-          },
-        })
-      : [];
-
-    const refs = new Map(references.map((ref) => [ref.id, ref]));
+    const refs = await this.loadAssociationReferenceMap(
+      worldId,
+      associationIds,
+    );
 
     const toGroup = (ids: string[], categories: string[]) =>
       ids
         .map((id) => refs.get(id))
-        .filter((ref): ref is (typeof references)[number] => Boolean(ref))
+        .filter((ref): ref is AssociationReference => Boolean(ref))
         .filter((ref) => categories.includes(ref.category))
         .map((ref) => ({
           name: ref.name,

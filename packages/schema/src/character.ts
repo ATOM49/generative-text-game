@@ -49,6 +49,21 @@ export const CharacterGallerySchema = z
     'Ordered list of multi-angle renders that make up the character gallery.',
   );
 
+export const CharacterProfileRequestSchema = z.object({
+  name: z
+    .string()
+    .min(1)
+    .describe('Name supplied by the builder to seed an auto-generated NPC.'),
+  description: z
+    .string()
+    .optional()
+    .describe('Short pitch or hook captured from user input.'),
+  species: z
+    .array(CharacterGroupSchema)
+    .default([])
+    .describe('Species or entity notes that anchor the generation process.'),
+});
+
 export const CharacterDescriptorSchema = z
   .object({
     label: z
@@ -135,6 +150,54 @@ export const CharacterBaseSchema = z.object({
   meta: CharacterMetaSchema,
 });
 
+export const CharacterCreationSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1)
+      .describe('Unique name captured during quick character creation.'),
+    description: z
+      .string()
+      .optional()
+      .describe('Optional short hook entered by the user.'),
+    speciesIds: z
+      .array(Id)
+      .min(1, 'Select at least one species to ground the concept.')
+      .describe('Selected species or entity IDs used for synthesis.'),
+  })
+  .describe('Minimal payload collected from the builder prior to synthesis.');
+
+export const CharacterGeneratedDetailsSchema = z
+  .object({
+    biography: z
+      .string()
+      .min(1)
+      .describe('Narrative-ready biography produced by the AI chain.'),
+    promptHint: z
+      .string()
+      .default('')
+      .describe('Optional directive that guides downstream art generation.'),
+    traits: z
+      .array(z.string())
+      .default([])
+      .describe('Tagged list of personality or visual traits.'),
+    meta: z
+      .object({
+        descriptors: z
+          .array(CharacterDescriptorSchema)
+          .default([])
+          .describe(
+            'Narrative descriptors surfaced in UI cards and AI prompts.',
+          ),
+        notes: z
+          .string()
+          .default('')
+          .describe('Internal notes that help narrators improvise scenes.'),
+      })
+      .describe('Structured metadata that keeps improvised NPCs consistent.'),
+  })
+  .describe('AI-authored structured details merged into the final character.');
+
 export const CharacterFormSchema = CharacterBaseSchema;
 
 export const CharacterSchema = CharacterBaseSchema.extend({
@@ -153,4 +216,11 @@ export type CharacterGalleryImage = z.infer<typeof CharacterGalleryImageSchema>;
 export type CharacterGroup = z.infer<typeof CharacterGroupSchema>;
 export type CharacterImageRequestInput = z.infer<
   typeof CharacterImageRequestSchema
+>;
+export type CharacterProfileRequestInput = z.infer<
+  typeof CharacterProfileRequestSchema
+>;
+export type CharacterCreationInput = z.infer<typeof CharacterCreationSchema>;
+export type CharacterGeneratedDetails = z.infer<
+  typeof CharacterGeneratedDetailsSchema
 >;
