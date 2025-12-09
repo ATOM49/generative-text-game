@@ -144,6 +144,8 @@ export default function LocationsPage({
             onCellSelected={handleCellSelected}
             onCellClick={handleCellClick}
             showGrid={true}
+            fogEnabled={!canEdit}
+            homeCellId={worldGrid?.grid.homeCellId}
           />
         )}
       </div>

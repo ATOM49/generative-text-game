@@ -6,6 +6,7 @@ import {
   Image as FabricImage,
   Point as FabricPoint,
   Rect as FabricRect,
+  Shadow as FabricShadow,
 } from 'fabric';
 import type { TPointerEventInfo } from 'fabric';
 import { useGridStore, type GridState } from '@/state/useGridStore';
@@ -15,6 +16,8 @@ import { type CanvasSize, getCellIndex, pointerToCell } from '@/utils/gridMath';
 export function useFabricGrid({
   onCellSelect,
   onBackgroundError,
+  fogEnabled = false,
+  revealedCellIndices = [],
 }: UseFabricGridOptions = {}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fabricRef = useRef<FabricCanvas | null>(null);
@@ -43,6 +46,55 @@ export function useFabricGrid({
     height: config.height,
   });
   const backgroundImageRef = useRef<FabricImage | null>(null);
+
+  const revealCell = useCallback(
+    (metadata: GridCellMetadata) => {
+      if (metadata.isRevealed) return;
+      metadata.isRevealed = true;
+      if (fogEnabled) {
+        metadata.wasManuallyRevealed = true;
+        metadata.fogRect?.set('opacity', 0);
+        metadata.rect?.set({
+          evented: true,
+          hoverCursor: 'pointer',
+        });
+        fabricRef.current?.requestRenderAll();
+      }
+    },
+    [fogEnabled],
+  );
+
+  const applyFogState = useCallback(() => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    if (!fogEnabled) {
+      cellsByIndexRef.current.forEach((metadata) => {
+        metadata.isRevealed = true;
+        metadata.wasManuallyRevealed = false;
+        metadata.rect?.set({
+          evented: true,
+          hoverCursor: 'pointer',
+        });
+        metadata.fogRect?.set('opacity', 0);
+      });
+      canvas.requestRenderAll();
+      return;
+    }
+
+    const revealedSet = new Set(revealedCellIndices);
+    cellsByIndexRef.current.forEach((metadata, index) => {
+      const shouldReveal =
+        revealedSet.has(index) || metadata.wasManuallyRevealed;
+      metadata.isRevealed = shouldReveal;
+      metadata.rect?.set({
+        evented: true,
+        hoverCursor: 'pointer',
+      });
+      metadata.fogRect?.set('opacity', shouldReveal ? 0 : 1);
+    });
+    canvas.requestRenderAll();
+  }, [fogEnabled, revealedCellIndices]);
 
   const fitBackgroundToCanvas = useCallback(() => {
     const canvas = fabricRef.current;
@@ -116,6 +168,9 @@ export function useFabricGrid({
       if (cell.rect) {
         canvas.remove(cell.rect);
       }
+      if (cell.fogRect) {
+        canvas.remove(cell.fogRect);
+      }
     });
     cellsRef.current = [];
     cellsByIndexRef.current.clear();
@@ -144,16 +199,44 @@ export function useFabricGrid({
           hoverCursor: 'pointer',
         });
 
+        let fogRect: FabricRect | undefined;
+        if (fogEnabled) {
+          fogRect = new FabricRect({
+            left: x * cellWidth - cellWidth * 0.05,
+            top: y * cellHeight - cellHeight * 0.05,
+            width: cellWidth * 1.1,
+            height: cellHeight * 1.1,
+            fill: 'rgba(2,6,23,0.92)',
+            selectable: false,
+            evented: false,
+            opacity: 1,
+            rx: Math.min(cellWidth, cellHeight) * 0.1,
+            ry: Math.min(cellWidth, cellHeight) * 0.1,
+            stroke: 'rgba(15,23,42,0.6)',
+            strokeWidth: Math.max(2, Math.min(cellWidth, cellHeight) * 0.08),
+          });
+          fogRect.shadow = new FabricShadow({
+            color: 'rgba(15,23,42,0.75)',
+            blur: Math.max(cellWidth, cellHeight) * 0.6,
+            offsetX: 0,
+            offsetY: 0,
+          });
+        }
+
         const metadata: GridCellMetadata = {
           cellX: x,
           cellY: y,
           index,
           rect,
+          fogRect,
           selected: false,
+          isRevealed: fogEnabled ? false : true,
+          wasManuallyRevealed: false,
         };
 
         rect.on('mouseover', () => {
           if (useGridStore.getState().interactionMode !== 'grid') return;
+          if (fogEnabled && !metadata.isRevealed) return;
           if (!metadata.selected) {
             rect.set('fill', 'rgba(59,130,246,0.18)');
             canvas.requestRenderAll();
@@ -161,6 +244,7 @@ export function useFabricGrid({
         });
 
         rect.on('mouseout', () => {
+          if (fogEnabled && !metadata.isRevealed) return;
           if (!metadata.selected) {
             rect.set('fill', 'rgba(255,255,255,0)');
             canvas.requestRenderAll();
@@ -169,6 +253,9 @@ export function useFabricGrid({
 
         rect.on('mousedown', (event: TPointerEventInfo) => {
           if (useGridStore.getState().interactionMode !== 'grid') return;
+          if (fogEnabled && !metadata.isRevealed) {
+            revealCell(metadata);
+          }
           const multi =
             event.e?.shiftKey || event.e?.metaKey || event.e?.ctrlKey;
           if (multi) {
@@ -180,12 +267,16 @@ export function useFabricGrid({
         });
 
         canvas.add(rect);
+        if (fogRect) {
+          canvas.add(fogRect);
+        }
         cellsRef.current.push(metadata);
         cellsByIndexRef.current.set(index, metadata);
       }
     }
 
     canvas.requestRenderAll();
+    applyFogState();
   }, [
     canvasSize.height,
     canvasSize.width,
@@ -193,11 +284,18 @@ export function useFabricGrid({
     onCellSelect,
     setSelectedCells,
     toggleCell,
+    fogEnabled,
+    applyFogState,
+    revealCell,
   ]);
 
   useEffect(() => {
     rebuildGrid();
   }, [rebuildGrid]);
+
+  useEffect(() => {
+    applyFogState();
+  }, [applyFogState]);
 
   useEffect(() => {
     const canvas = fabricRef.current;
@@ -355,6 +453,9 @@ export function useFabricGrid({
     };
 
     const handleMouseDown = (event: TPointerEventInfo) => {
+      if (fogEnabled) {
+        return;
+      }
       if (useGridStore.getState().interactionMode !== 'grid') {
         return;
       }
@@ -374,6 +475,7 @@ export function useFabricGrid({
     };
 
     const handleMouseMove = (event: TPointerEventInfo) => {
+      if (fogEnabled) return;
       if (!dragStart || !regionRectRef.current) return;
       if (useGridStore.getState().interactionMode !== 'grid') return;
       const pointer = canvas.getPointer(event.e);
@@ -389,6 +491,12 @@ export function useFabricGrid({
     };
 
     const handleMouseUp = (event: TPointerEventInfo) => {
+      if (fogEnabled) {
+        dragStart = null;
+        regionRectRef.current?.set({ visible: false });
+        canvas.requestRenderAll();
+        return;
+      }
       if (!dragStart || !regionRectRef.current) return;
       if (useGridStore.getState().interactionMode !== 'grid') {
         dragStart = null;
@@ -448,7 +556,14 @@ export function useFabricGrid({
       canvas.off('mouse:move', handleMouseMove);
       canvas.off('mouse:up', handleMouseUp);
     };
-  }, [canvasSize, config, onCellSelect, setRegion, setSelectedCells]);
+  }, [
+    canvasSize,
+    config,
+    fogEnabled,
+    onCellSelect,
+    setRegion,
+    setSelectedCells,
+  ]);
 
   return useMemo(
     () => ({

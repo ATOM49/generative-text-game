@@ -11,9 +11,12 @@ import type {
 // Export schema types
 export type { GridConfig, RegionSelection };
 
-// Extend GridCellMetadata with Fabric-specific rect property
+// Extend GridCellMetadata with Fabric-specific rect + fog metadata
 export interface GridCellMetadata extends BaseGridCellMetadata {
   rect?: Rect;
+  fogRect?: Rect;
+  isRevealed?: boolean;
+  wasManuallyRevealed?: boolean;
 }
 
 export type OnCellClick = (cells: GridCellMetadata[]) => void;
@@ -24,9 +27,13 @@ export interface FabricGridProps {
   onCellSelect?: OnCellClick;
   onReady?: (canvas: Canvas | null) => void;
   onBackgroundError?: (error: Error) => void;
+  fogEnabled?: boolean;
+  revealedCellIndices?: number[];
 }
 
 export interface UseFabricGridOptions {
   onCellSelect?: OnCellClick;
   onBackgroundError?: (error: Error) => void;
+  fogEnabled?: boolean;
+  revealedCellIndices?: number[];
 }

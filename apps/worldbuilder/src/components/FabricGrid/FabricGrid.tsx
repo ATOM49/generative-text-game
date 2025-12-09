@@ -11,10 +11,14 @@ export function FabricGrid({
   onCellSelect,
   onReady,
   onBackgroundError,
+  fogEnabled = false,
+  revealedCellIndices,
 }: FabricGridProps) {
   const { canvasRef, fabricRef, isReady } = useFabricGrid({
     onCellSelect,
     onBackgroundError,
+    fogEnabled,
+    revealedCellIndices,
   });
 
   useEffect(() => {

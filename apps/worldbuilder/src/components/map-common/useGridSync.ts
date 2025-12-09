@@ -11,7 +11,7 @@ export const DEFAULT_CANVAS_WIDTH = 1024;
 interface GridInput {
   imageUrl: string;
   grid?: {
-    grid: Pick<WorldGrid, 'width' | 'height'>;
+    grid: Pick<WorldGrid, '_id' | 'width' | 'height' | 'homeCellId'>;
     cells: GridCell[];
   };
   activeCellId?: string | null;

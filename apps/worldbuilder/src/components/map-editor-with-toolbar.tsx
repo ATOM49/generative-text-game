@@ -23,7 +23,7 @@ interface RelativeShape {
 interface MapEditorWithToolbarProps {
   imageUrl: string;
   grid?: {
-    grid: Pick<WorldGrid, 'width' | 'height'>;
+    grid: Pick<WorldGrid, '_id' | 'width' | 'height' | 'homeCellId'>;
     cells: GridCell[];
   };
   activeCellId?: string | null;
