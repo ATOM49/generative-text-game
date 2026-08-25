@@ -137,15 +137,6 @@ const editImage: FastifyPluginAsync = async (fastify) => {
           });
         }
 
-        // Validate OpenAI API key
-        if (!process.env.OPENAI_API_KEY) {
-          fastify.log.error('OPENAI_API_KEY is not configured');
-          return reply.status(500).send({
-            error: 'Service configuration error',
-            details: 'Image editing service is not properly configured',
-          });
-        }
-
         fastify.log.info({
           msg: 'Starting image edit operation',
           polygon,
@@ -228,29 +219,29 @@ const editImage: FastifyPluginAsync = async (fastify) => {
             size: size || '1024x1024',
             keyPrefix: keyPrefix || 'edits/',
           });
-        } catch (openaiError) {
+        } catch (upstreamError) {
           fastify.log.error({
-            msg: 'OpenAI API error',
-            error: openaiError,
+            msg: 'Image editing provider error',
+            error: upstreamError,
           });
 
           // Handle specific upstream errors
-          if (openaiError instanceof Error) {
-            if (openaiError.message.includes('rate limit')) {
+          if (upstreamError instanceof Error) {
+            if (upstreamError.message.toLowerCase().includes('rate limit')) {
               return reply.status(429).send({
                 error: 'Rate limit exceeded',
                 details: 'Too many requests to image editing service',
               });
             }
-            if (openaiError.message.includes('timeout')) {
+            if (upstreamError.message.toLowerCase().includes('timeout')) {
               return reply.status(504).send({
                 error: 'Request timeout',
                 details: 'Image editing took too long',
               });
             }
             if (
-              openaiError.message.includes('content policy') ||
-              openaiError.message.includes('safety')
+              upstreamError.message.includes('content policy') ||
+              upstreamError.message.includes('safety')
             ) {
               return reply.status(400).send({
                 error: 'Content policy violation',
@@ -259,7 +250,7 @@ const editImage: FastifyPluginAsync = async (fastify) => {
             }
           }
 
-          throw openaiError;
+          throw upstreamError;
         }
 
         // Validate the generated URL

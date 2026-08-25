@@ -2,6 +2,22 @@
 
 AI utilities package for Talespin, providing LangChain runnables for image generation, editing, and structured output operations.
 
+Provider-neutral contracts are exported for structured output, image
+generation, and image editing. The package also includes a Segmind AI Gateway
+client with V1 synchronous inference, V2 submit/poll/result inference, bounded
+timeouts, request-ID tracking, sanitized provider errors, and model-slug path
+validation.
+
+Concrete Segmind image adapters currently cover:
+
+- `nano-banana-pro` for maps;
+- `seedream-4.5` for character art;
+- `ideogram-4` for faction art.
+
+Each adapter owns its model-specific request mapping. New Segmind text, image,
+video, or editing endpoints should use `SegmindModelEndpoint` rather than
+placing provider parameters in watcher routes.
+
 ## Installation
 
 This is an internal package within the Talespin monorepo. It's automatically linked via pnpm workspaces.
@@ -161,6 +177,7 @@ type OutArgs = {
 ## API Requirements
 
 - **OpenAI API Key**: Set `OPENAI_API_KEY` environment variable or pass via constructor
+- **Segmind API Key**: Set `SEGMIND_API_KEY` server-side or pass it to `SegmindClient`
 - **Models**:
   - Structured Output: `gpt-4o-mini`, `gpt-4o`, `gpt-4-turbo` (supports native structured output)
   - Image Editing: `dall-e-2`

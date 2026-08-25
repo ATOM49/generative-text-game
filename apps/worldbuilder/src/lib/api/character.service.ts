@@ -60,11 +60,18 @@ export class CharacterService {
     private prisma: PrismaClient,
     options?: { watcherBaseUrl?: string; generationTimeoutMs?: number },
   ) {
+    const configuredTimeout = Number(
+      process.env.WATCHER_GENERATION_TIMEOUT_MS || 180000,
+    );
     this.watcherBaseUrl =
       options?.watcherBaseUrl ||
       process.env.WATCHER_API_URL ||
       'http://localhost:4000';
-    this.generationTimeout = options?.generationTimeoutMs ?? 60000;
+    this.generationTimeout =
+      options?.generationTimeoutMs ??
+      (Number.isFinite(configuredTimeout) && configuredTimeout > 0
+        ? configuredTimeout
+        : 180000);
   }
 
   async listCharacters(

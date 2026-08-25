@@ -5,7 +5,7 @@
   "description": "This project was bootstrapped with Fastify-CLI.",
   "main": "app.ts",
   "scripts": {
-    "test": "npm run build:ts && tsc -p test/tsconfig.json && c8 node --test -r ts-node/register \"test/**/*.ts\"",
+    "test": "npm run build:ts && tsc -p test/tsconfig.json && FASTIFY_AUTOLOAD_TYPESCRIPT=1 c8 node --test --loader ts-node/esm \"test/**/*.test.ts\"",
     "start": "npm run build:ts && fastify start -l info -p 4000 dist/app.js",
     "build:ts": "tsc -p tsconfig.build.json",
     "watch:ts": "tsc -w -p tsconfig.build.json",

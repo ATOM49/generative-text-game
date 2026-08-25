@@ -11,10 +11,17 @@ const PROVIDERS = [
 
 interface SignInProvidersProps {
   callbackUrl?: string;
+  e2eEnabled?: boolean;
 }
 
-export function SignInProviders({ callbackUrl }: SignInProvidersProps) {
+export function SignInProviders({
+  callbackUrl,
+  e2eEnabled = false,
+}: SignInProvidersProps) {
   const [pendingProvider, setPendingProvider] = useState<string | null>(null);
+  const providers = e2eEnabled
+    ? [...PROVIDERS, { id: 'e2e', label: 'Continue with E2E account' }]
+    : PROVIDERS;
 
   const handleSignIn = async (provider: string) => {
     setPendingProvider(provider);
@@ -29,7 +36,7 @@ export function SignInProviders({ callbackUrl }: SignInProvidersProps) {
 
   return (
     <div className="space-y-3">
-      {PROVIDERS.map((provider) => (
+      {providers.map((provider) => (
         <Button
           key={provider.id}
           className="w-full"

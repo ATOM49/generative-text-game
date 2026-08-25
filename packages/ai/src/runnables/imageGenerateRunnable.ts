@@ -1,26 +1,11 @@
 import { Runnable } from '@langchain/core/runnables';
 import { DallEAPIWrapper } from '@langchain/openai';
+import type { GeneratedImage, ImageGenerationInput } from '../contracts.js';
 
-type InArgs = {
-  prompt: string;
-  size: '1024x1024' | '1792x1024' | '1024x1792';
-  quality?: 'standard' | 'hd';
-  style?: 'vivid' | 'natural';
-};
-
-type OutArgs = {
-  imageBuffer: Buffer;
-  revisedPrompt?: string;
-  providerMeta: {
-    provider: 'openai';
-    model: string;
-    size: string;
-    quality: string;
-    style: string;
-  };
-};
-
-export class OpenAIImageGenerateRunnable extends Runnable<InArgs, OutArgs> {
+export class OpenAIImageGenerateRunnable extends Runnable<
+  ImageGenerationInput,
+  GeneratedImage
+> {
   lc_namespace = ['talespin', 'ai', 'runnables'];
 
   private apiKey: string;
@@ -32,7 +17,7 @@ export class OpenAIImageGenerateRunnable extends Runnable<InArgs, OutArgs> {
     this.model = opts?.model ?? 'dall-e-3';
   }
 
-  async invoke(input: InArgs): Promise<OutArgs> {
+  async invoke(input: ImageGenerationInput): Promise<GeneratedImage> {
     // Create a new wrapper instance with the specific configuration for this request
     const wrapper = new DallEAPIWrapper({
       openAIApiKey: this.apiKey,
@@ -50,6 +35,7 @@ export class OpenAIImageGenerateRunnable extends Runnable<InArgs, OutArgs> {
 
     return {
       imageBuffer,
+      contentType: 'image/png',
       revisedPrompt: undefined, // DallEAPIWrapper doesn't expose revised_prompt
       providerMeta: {
         provider: 'openai',

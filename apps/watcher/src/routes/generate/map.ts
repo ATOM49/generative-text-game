@@ -71,15 +71,6 @@ const generateMap: FastifyPluginAsync = async (fastify) => {
           });
         }
 
-        // Validate OpenAI API key
-        if (!process.env.OPENAI_API_KEY) {
-          fastify.log.error('OPENAI_API_KEY is not configured');
-          return reply.status(500).send({
-            error: 'Service configuration error',
-            details: 'Image generation service is not properly configured',
-          });
-        }
-
         fastify.log.info({
           msg: 'Starting map generation',
           world: { name: world.name, theme: world.theme },
@@ -93,7 +84,7 @@ const generateMap: FastifyPluginAsync = async (fastify) => {
         });
 
         fastify.log.debug({
-          msg: 'Generated prompt for DALL-E',
+          msg: 'Generated map image prompt',
           prompt: prompt.substring(0, 200), // Log first 200 chars
         });
 
@@ -108,32 +99,33 @@ const generateMap: FastifyPluginAsync = async (fastify) => {
           const res = await fastify.imageGen.generateImageToCdn({
             prompt,
             keyPrefix: `maps/${slug}/`,
+            purpose: 'map',
             size: '1024x1024',
           });
           imageUrl = res.url;
-        } catch (openaiError) {
+        } catch (upstreamError) {
           fastify.log.error({
-            msg: 'OpenAI API error',
-            error: openaiError,
+            msg: 'Image provider error',
+            error: upstreamError,
           });
 
-          // Handle specific upstream errors (OpenAI / CDN)
-          if (openaiError instanceof Error) {
-            if (openaiError.message.includes('rate limit')) {
+          // Handle specific upstream provider/CDN errors
+          if (upstreamError instanceof Error) {
+            if (upstreamError.message.toLowerCase().includes('rate limit')) {
               return reply.status(429).send({
                 error: 'Rate limit exceeded',
                 details: 'Too many requests to image generation service',
               });
             }
-            if (openaiError.message.includes('timeout')) {
+            if (upstreamError.message.toLowerCase().includes('timeout')) {
               return reply.status(504).send({
                 error: 'Request timeout',
                 details: 'Image generation took too long',
               });
             }
             if (
-              openaiError.message.includes('content policy') ||
-              openaiError.message.includes('safety')
+              upstreamError.message.includes('content policy') ||
+              upstreamError.message.includes('safety')
             ) {
               return reply.status(400).send({
                 error: 'Content policy violation',
@@ -142,7 +134,7 @@ const generateMap: FastifyPluginAsync = async (fastify) => {
             }
           }
 
-          throw openaiError;
+          throw upstreamError;
         }
 
         // Validate the generated URL

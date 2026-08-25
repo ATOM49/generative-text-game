@@ -34,7 +34,8 @@ export default defineConfig([
   {
     // Note: there should be no other properties in this object
     ignores: [
-      'coverage',
+      '**/coverage',
+      '**/.next',
       '**/public',
       '**/dist',
       'pnpm-lock.yaml',

@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   CharacterGalleryImageSchema,
   CharacterImageRequestSchema,
-  type CharacterImageRequestInput,
 } from '@talespin/schema';
 
 export interface ImageGenerationOptions {
@@ -91,7 +90,14 @@ export class ImageGenerationService {
   private readonly baseUrl: string;
 
   constructor(options?: ImageGenerationOptions) {
-    this.timeout = options?.timeout ?? 60000; // 60 seconds
+    const configuredTimeout = Number(
+      process.env.WATCHER_GENERATION_TIMEOUT_MS || 180000,
+    );
+    this.timeout =
+      options?.timeout ??
+      (Number.isFinite(configuredTimeout) && configuredTimeout > 0
+        ? configuredTimeout
+        : 180000);
     this.maxRetries = options?.maxRetries ?? 2;
     this.retryDelay = options?.retryDelay ?? 1000; // 1 second
     this.baseUrl =

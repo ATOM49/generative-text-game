@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -52,7 +52,7 @@ const ROLE_CARDS: Record<
   },
 };
 
-export default function ChooseRolePage() {
+function ChooseRoleContent() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -177,5 +177,19 @@ export default function ChooseRolePage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function ChooseRolePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-center">Loading...</div>
+        </div>
+      }
+    >
+      <ChooseRoleContent />
+    </Suspense>
   );
 }

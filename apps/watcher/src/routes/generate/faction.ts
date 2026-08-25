@@ -82,14 +82,6 @@ const generateFaction: FastifyPluginAsync = async (fastify) => {
       const startTime = Date.now();
 
       try {
-        if (!process.env.OPENAI_API_KEY) {
-          fastify.log.error('OPENAI_API_KEY is not configured');
-          return reply.status(500).send({
-            error: 'Service configuration error',
-            details: 'Image generation service is not properly configured',
-          });
-        }
-
         const { name, category } = req.body;
         if (!name?.trim()) {
           return reply.status(400).send({
@@ -123,31 +115,32 @@ const generateFaction: FastifyPluginAsync = async (fastify) => {
           const result = await fastify.imageGen.generateImageToCdn({
             prompt,
             keyPrefix: `factions/${slug}/`,
+            purpose: 'faction',
           });
           imageUrl = result.url;
           revisedPrompt = result.revisedPrompt;
-        } catch (openaiError) {
+        } catch (upstreamError) {
           fastify.log.error({
-            msg: 'OpenAI API error while generating faction image',
-            error: openaiError,
+            msg: 'Image provider error while generating faction image',
+            error: upstreamError,
           });
 
-          if (openaiError instanceof Error) {
-            if (openaiError.message.includes('rate limit')) {
+          if (upstreamError instanceof Error) {
+            if (upstreamError.message.toLowerCase().includes('rate limit')) {
               return reply.status(429).send({
                 error: 'Rate limit exceeded',
                 details: 'Too many requests to image generation service',
               });
             }
-            if (openaiError.message.includes('timeout')) {
+            if (upstreamError.message.toLowerCase().includes('timeout')) {
               return reply.status(504).send({
                 error: 'Request timeout',
                 details: 'Image generation took too long',
               });
             }
             if (
-              openaiError.message.includes('content policy') ||
-              openaiError.message.includes('safety')
+              upstreamError.message.includes('content policy') ||
+              upstreamError.message.includes('safety')
             ) {
               return reply.status(400).send({
                 error: 'Content policy violation',
@@ -156,7 +149,7 @@ const generateFaction: FastifyPluginAsync = async (fastify) => {
             }
           }
 
-          throw openaiError;
+          throw upstreamError;
         }
 
         if (!imageUrl) {

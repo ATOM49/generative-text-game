@@ -1,6 +1,7 @@
 // MinIO client exports
 export {
   createMinioClient,
+  extensionForContentType,
   type MinioClientOptions,
   type MinioClientInstance,
   type UploadBufferArgs,

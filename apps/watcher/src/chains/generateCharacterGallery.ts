@@ -1,14 +1,9 @@
-import { OpenAIStructuredOutputRunnable } from '@talespin/ai';
 import { CharacterGalleryImageSchema } from '@talespin/schema';
 import { RunnableSequence, RunnableLambda } from '@langchain/core/runnables';
 import { z } from 'zod';
 import turnaroundPlannerTemplate from '../prompts/turnaroundPlannerTemplate.js';
 import type { FastifyInstance } from 'fastify';
-
-const plannerChain = new OpenAIStructuredOutputRunnable({
-  apiKey: process.env.OPENAI_API_KEY,
-  model: 'gpt-4o-mini',
-});
+import { createStructuredOutputModel } from '../config/models.js';
 
 const TurnaroundShotSchema = z.object({
   angle: z.string().min(1),
@@ -20,8 +15,11 @@ const TurnaroundPlanSchema = z.object({
   shots: z.array(TurnaroundShotSchema).min(2).max(3),
 });
 
-export const createCharacterGalleryChain = (fastify: FastifyInstance) =>
-  RunnableSequence.from([
+export const createCharacterGalleryChain = (fastify: FastifyInstance) => {
+  const plannerChain =
+    createStructuredOutputModel<z.infer<typeof TurnaroundPlanSchema>>();
+
+  return RunnableSequence.from([
     RunnableLambda.from(
       async (input: { characterBrief: string; slug: string }) => {
         const plannerPrompt = await turnaroundPlannerTemplate.format({
@@ -57,6 +55,7 @@ export const createCharacterGalleryChain = (fastify: FastifyInstance) =>
             await fastify.imageGen.generateImageToCdn({
               prompt: enforcedPrompt,
               keyPrefix: `characters/${slug}/${shot.angle}`,
+              purpose: 'character',
               // Request a portrait orientation (taller-than-wide) to keep images consistent
               size: '1024x1792',
             });
@@ -73,3 +72,4 @@ export const createCharacterGalleryChain = (fastify: FastifyInstance) =>
       },
     ),
   ]);
+};

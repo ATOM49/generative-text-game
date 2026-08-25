@@ -1,29 +1,14 @@
 import { Runnable } from '@langchain/core/runnables';
 import { ChatOpenAI } from '@langchain/openai';
-
-type InArgs = {
-  prompt: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  schema: any; // Zod schema - using any to avoid deep instantiation issues
-  temperature?: number;
-  maxRetries?: number;
-};
-
-type OutArgs<T> = {
-  structuredResponse: T;
-  providerMeta: {
-    provider: 'openai';
-    model: string;
-    promptTokens?: number;
-    completionTokens?: number;
-    totalTokens?: number;
-  };
-};
+import type {
+  StructuredOutputInput,
+  StructuredOutputResult,
+} from '../contracts.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export class OpenAIStructuredOutputRunnable<T = any> extends Runnable<
-  InArgs,
-  OutArgs<T>
+  StructuredOutputInput<T>,
+  StructuredOutputResult<T>
 > {
   lc_namespace = ['talespin', 'ai', 'runnables'];
 
@@ -36,7 +21,9 @@ export class OpenAIStructuredOutputRunnable<T = any> extends Runnable<
     this.model = opts?.model ?? 'gpt-4o-mini';
   }
 
-  async invoke(input: InArgs): Promise<OutArgs<T>> {
+  async invoke(
+    input: StructuredOutputInput<T>,
+  ): Promise<StructuredOutputResult<T>> {
     const llm = new ChatOpenAI({
       apiKey: this.apiKey,
       model: this.model,

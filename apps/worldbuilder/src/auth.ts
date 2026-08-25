@@ -1,6 +1,7 @@
-import NextAuth from 'next-auth';
+import NextAuth, { type NextAuthConfig } from 'next-auth';
 import Google from 'next-auth/providers/google';
 import Facebook from 'next-auth/providers/facebook';
+import Credentials from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import type { AppUserRole } from '@/lib/auth/roles';
@@ -13,22 +14,49 @@ const ensureEnv = (key: string) => {
   return value;
 };
 
-const googleProvider = Google({
-  clientId: ensureEnv('GOOGLE_CLIENT_ID'),
-  clientSecret: ensureEnv('GOOGLE_CLIENT_SECRET'),
-});
+const e2eTestMode =
+  process.env.E2E_TEST_MODE === 'true' && process.env.NODE_ENV !== 'production';
 
-const facebookProvider = Facebook({
-  clientId: ensureEnv('FACEBOOK_CLIENT_ID'),
-  clientSecret: ensureEnv('FACEBOOK_CLIENT_SECRET'),
-});
+const providers: NextAuthConfig['providers'] = e2eTestMode
+  ? [
+      Credentials({
+        id: 'e2e',
+        name: 'E2E account',
+        credentials: {},
+        async authorize() {
+          const email = 'playwright@talespin.local';
+          const user = await prisma.user.upsert({
+            where: { email },
+            update: { name: 'Playwright Builder', role: null },
+            create: { email, name: 'Playwright Builder' },
+          });
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role ?? undefined,
+          };
+        },
+      }),
+    ]
+  : [
+      Google({
+        clientId: ensureEnv('GOOGLE_CLIENT_ID'),
+        clientSecret: ensureEnv('GOOGLE_CLIENT_SECRET'),
+      }),
+      Facebook({
+        clientId: ensureEnv('FACEBOOK_CLIENT_ID'),
+        clientSecret: ensureEnv('FACEBOOK_CLIENT_SECRET'),
+      }),
+    ];
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
   pages: { signIn: '/signin' },
   trustHost: true,
-  providers: [googleProvider, facebookProvider],
+  providers,
   callbacks: {
     async jwt({ token, user, trigger }) {
       if (user) {

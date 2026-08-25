@@ -33,6 +33,22 @@ export type MinioClientInstance = {
   bucket: string;
 };
 
+export const extensionForContentType = (contentType: string): string => {
+  switch (contentType.split(';', 1)[0]?.trim().toLowerCase()) {
+    case 'image/jpeg':
+      return 'jpg';
+    case 'image/webp':
+      return 'webp';
+    case 'image/gif':
+      return 'gif';
+    case 'image/avif':
+      return 'avif';
+    case 'image/png':
+    default:
+      return 'png';
+  }
+};
+
 /**
  * Creates a MinIO client instance for CDN operations
  *
@@ -78,7 +94,8 @@ export function createMinioClient(
     keyPrefix = 'maps/',
     contentType = 'image/png',
   }: UploadBufferArgs): Promise<{ key: string; url: string }> => {
-    const key = `${keyPrefix}${randomUUID()}.png`;
+    const extension = extensionForContentType(contentType);
+    const key = `${keyPrefix}${randomUUID()}.${extension}`;
 
     await client.putObject(bucket, key, buffer, buffer.length, {
       'Content-Type': contentType,

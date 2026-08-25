@@ -22,6 +22,7 @@ Create `apps/worldbuilder/.env` (or populate your shared env) with the following
 ```env
 DATABASE_URL="mongodb://localhost:27017/talespin?replicaSet=rs0"
 WATCHER_API_URL="http://localhost:4000"
+WATCHER_GENERATION_TIMEOUT_MS="180000"
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="generate-a-long-random-string"
 
@@ -35,6 +36,15 @@ NEXT_PUBLIC_COPILOT_CLOUD_PUBLIC_API_KEY="..."
 ```
 
 Restart `pnpm dev:world` any time you change `NEXTAUTH_*` or provider credentials.
+
+### Browser E2E
+
+Install Chromium once with `pnpm test:e2e:install`, then run
+`pnpm test:e2e:local` from the repository root. The command starts MongoDB and
+MinIO, launches watcher on port 4100 and worldbuilder on port 3100, and runs the
+Playwright builder flow. A credentials provider is exposed only when
+`E2E_TEST_MODE=true` in a non-production process. Failure traces, screenshots,
+and videos are written under `test-results/`.
 
 ### Authentication & Roles
 

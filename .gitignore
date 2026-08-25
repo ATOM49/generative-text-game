@@ -148,3 +148,8 @@ apps/*/node_modules/
 apps/*/dist/
 packages/*/node_modules/
 packages/*/dist/
+
+# Playwright artifacts
+playwright-report/
+test-results/
+blob-report/

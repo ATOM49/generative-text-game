@@ -1,26 +1,12 @@
 import { Runnable } from '@langchain/core/runnables';
 import OpenAI from 'openai';
 import { toFile } from 'openai/uploads';
+import type { EditedImage, ImageEditInput } from '../contracts.js';
 
-type InArgs = {
-  prompt: string;
-  negativePrompt?: string;
-  image: Buffer;
-  mask: Buffer;
-  size: '256x256' | '512x512' | '1024x1024';
-};
-
-type OutArgs = {
-  editedImageBuffer: Buffer;
-  providerMeta: {
-    provider: 'openai';
-    model: string;
-    size: string;
-    requestId?: string;
-  };
-};
-
-export class OpenAIImageEditRunnable extends Runnable<InArgs, OutArgs> {
+export class OpenAIImageEditRunnable extends Runnable<
+  ImageEditInput,
+  EditedImage
+> {
   lc_namespace = ['talespin', 'ai', 'runnables'];
 
   private client: OpenAI;
@@ -34,7 +20,7 @@ export class OpenAIImageEditRunnable extends Runnable<InArgs, OutArgs> {
     this.model = opts?.model ?? 'dall-e-2';
   }
 
-  async invoke(input: InArgs): Promise<OutArgs> {
+  async invoke(input: ImageEditInput): Promise<EditedImage> {
     const imageFile = await toFile(input.image, 'image.png', {
       type: 'image/png',
     });
@@ -64,6 +50,7 @@ export class OpenAIImageEditRunnable extends Runnable<InArgs, OutArgs> {
 
     return {
       editedImageBuffer,
+      contentType: 'image/png',
       providerMeta: {
         provider: 'openai',
         model: this.model,

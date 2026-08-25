@@ -44,9 +44,7 @@ services:
       mc mb --ignore-existing local/images &&
       mc version enable local/images &&
       mc anonymous set download local/images &&
-      mc ilm rule add --id=keep-latest-100 --expire-days 0 --noncurrent-expire-days 30 local/images &&
-      mc admin trace -v local &
-      mc bucket website set local/images enable &&
+      mc ilm rule add --noncurrent-expire-days 30 --noncurrent-expire-newer 100 local/images &&
       echo 'MinIO bucket ready'
       "
     restart: 'no'

@@ -1,4 +1,3 @@
-import { OpenAIStructuredOutputRunnable } from '@talespin/ai';
 import {
   CharacterGeneratedDetailsSchema,
   CharacterGroupSchema,
@@ -6,6 +5,7 @@ import {
 import { RunnableLambda } from '@langchain/core/runnables';
 import { characterProfileTemplate } from '../prompts/characterProfileTemplate.js';
 import { z } from 'zod';
+import { createStructuredOutputModel } from '../config/models.js';
 
 const summaryFromGroups = (groups: z.infer<typeof CharacterGroupSchema>[]) => {
   if (!groups.length) {
@@ -19,19 +19,19 @@ const summaryFromGroups = (groups: z.infer<typeof CharacterGroupSchema>[]) => {
     .join('; ');
 };
 
-const profileChain = new OpenAIStructuredOutputRunnable({
-  apiKey: process.env.OPENAI_API_KEY,
-  model: 'gpt-4o-mini',
-});
-
 interface CharacterProfileChainInput {
   name: string;
   description?: string;
   species: z.infer<typeof CharacterGroupSchema>[];
 }
 
-export const createCharacterProfileChain = () =>
-  RunnableLambda.from(async (input: CharacterProfileChainInput) => {
+export const createCharacterProfileChain = () => {
+  const profileChain =
+    createStructuredOutputModel<
+      z.infer<typeof CharacterGeneratedDetailsSchema>
+    >();
+
+  return RunnableLambda.from(async (input: CharacterProfileChainInput) => {
     const prompt = await characterProfileTemplate.format({
       name: input.name,
       description: input.description ?? 'No description provided.',
@@ -46,3 +46,4 @@ export const createCharacterProfileChain = () =>
 
     return structuredResponse;
   });
+};

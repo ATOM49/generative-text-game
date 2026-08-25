@@ -2,13 +2,12 @@ import { test } from 'node:test';
 import * as assert from 'node:assert';
 
 import Fastify from 'fastify';
-import Support from '../../src/plugins/support';
+import Sensible from '../../src/plugins/sensible.js';
 
-test('support works standalone', async (t) => {
+test('sensible works standalone', async () => {
   const fastify = Fastify();
-  // eslint-disable-next-line no-void
-  void fastify.register(Support);
+  void fastify.register(Sensible);
   await fastify.ready();
 
-  assert.equal(fastify.someSupport(), 'hugs');
+  assert.equal(fastify.httpErrors.notFound().statusCode, 404);
 });

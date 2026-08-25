@@ -35,16 +35,16 @@ Adds useful utilities for handling HTTP errors and common responses via `@fastif
 
 ### `image-generation.ts`
 
-Provides AI-powered image generation and editing capabilities via OpenAI's DALL-E. Decorates the Fastify instance with `fastify.imageGen`, exposing:
+Provides provider-neutral image generation and editing. Decorates the Fastify instance with `fastify.imageGen`, exposing:
 
-- `generateImageToCdn({ prompt, keyPrefix, size })`: Generate images using DALL-E 3 with intelligent caching by keyPrefix to avoid redundant OpenAI calls. Works for maps, characters, factions, or any other image type—just provide the appropriate keyPrefix.
-- `editImageToCdn({ prompt, image, mask, keyPrefix, size })`: Edit existing images using DALL-E 2's inpainting capabilities
+- `generateImageToCdn({ prompt, keyPrefix, purpose, size })`: Select the configured map, character, or faction model and cache by the complete generation identity.
+- `editImageToCdn({ prompt, image, mask, keyPrefix, size })`: Edit an image with the independently configured editing provider.
 
-This plugin implements intelligent caching by checking MinIO for existing images before invoking OpenAI, significantly reducing API costs. It also cleanly separates AI buffer generation from CDN upload logic for maintainability.
+Segmind is the image-generation default when `SEGMIND_API_KEY` is present. Nano Banana Pro generates maps, Seedream 4.5 generates character art, and Ideogram 4.0 generates faction art. Provider responses are normalized to bytes and uploaded to MinIO with their actual content type.
 
 **Dependencies**: `@talespin/ai`, `@talespin/cdn`, `cdn` plugin
 
-**Environment Variables**: Requires `OPENAI_API_KEY`
+**Environment Variables**: See `apps/watcher/.env.example`. Credentials stay server-side.
 
 ---
 

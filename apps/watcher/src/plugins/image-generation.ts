@@ -1,14 +1,14 @@
 /**
  * Image Generation Plugin
  *
- * Provides AI-powered image generation and editing capabilities via OpenAI's DALL-E.
+ * Provides provider-neutral image generation and editing with CDN persistence.
  *
  * Features:
- * - generateImageToCdn: Generate new images from text prompts (DALL-E 3) with intelligent caching
- * - editImageToCdn: Edit existing images using inpainting masks (DALL-E 2)
+ * - generateImageToCdn: Select a model by asset purpose and cache the result
+ * - editImageToCdn: Edit existing images using the configured editing provider
  *
  * Dependencies:
- * - @talespin/ai: OpenAIImageGenerateRunnable and OpenAIImageEditRunnable
+ * - @talespin/ai: provider model adapters
  * - @talespin/cdn: MinIO client for CDN uploads
  * - cdn plugin must be registered before this plugin
  *
@@ -17,6 +17,19 @@
 import { File as NodeFile } from 'node:buffer';
 import fp from 'fastify-plugin';
 import type { MinioClientInstance } from '@talespin/cdn';
+import type {
+  ImageEditModel,
+  ImageGenerationModel,
+  ImageGenerationSize,
+} from '@talespin/ai';
+import {
+  assertAIImageConfigured,
+  assertAIModelConfigured,
+  loadAIConfig,
+  missingSegmindAdapterError,
+  type ImagePurpose,
+} from '../config/ai.js';
+import { createImageCacheFingerprint } from '../utils/image-cache.js';
 
 export type ImageGenOptions = {
   defaultSize?: '1024x1024' | '1792x1024' | '1024x1792';
@@ -39,7 +52,7 @@ declare module 'fastify' {
     imageGen: {
       /**
        * Generate an image from a text prompt and upload to CDN.
-       * Automatically caches images by keyPrefix to avoid redundant OpenAI calls.
+       * Caches by provider, model, purpose, prompt, and requested size.
        *
        * @param prompt - The text prompt for image generation
        * @param keyPrefix - CDN storage prefix (e.g., 'maps/world-name/' or 'characters/hero/')
@@ -48,7 +61,8 @@ declare module 'fastify' {
       generateImageToCdn: (args: {
         prompt: string;
         keyPrefix: string;
-        size?: '1024x1024' | '1792x1024' | '1024x1792';
+        purpose: ImagePurpose;
+        size?: ImageGenerationSize;
       }) => Promise<{ url: string; key: string; revisedPrompt?: string }>;
       editImageToCdn: (args: {
         prompt: string;
@@ -86,11 +100,6 @@ if (typeof globalThis.File === 'undefined') {
 
 export default fp<ImageGenOptions>(
   async (fastify, opts) => {
-    if (!process.env.OPENAI_API_KEY) {
-      fastify.log.error('OPENAI_API_KEY missing');
-      throw new Error('OPENAI_API_KEY not configured');
-    }
-
     const defaultSize = opts.defaultSize || '1024x1024';
 
     // Wait for CDN plugin to be registered
@@ -100,40 +109,82 @@ export default fp<ImageGenOptions>(
 
     const cdnClient: MinioClientInstance = fastify.cdn;
 
-    const { OpenAIImageEditRunnable, OpenAIImageGenerateRunnable } =
-      await loadAiModule();
+    const ai = await loadAiModule();
+    const aiConfig = loadAIConfig();
+    assertAIImageConfigured(aiConfig.image);
 
-    // Initialize the image generate runnable
-    const imageGenerateRunnable = new OpenAIImageGenerateRunnable({
-      apiKey: process.env.OPENAI_API_KEY,
-      model: 'dall-e-3',
-    });
+    let imageGenerateModels: Record<ImagePurpose, ImageGenerationModel>;
+    if (aiConfig.image.provider === 'segmind') {
+      const client = new ai.SegmindClient({ apiKey: aiConfig.image.apiKey });
+      imageGenerateModels = {
+        map: ai.createNanoBananaProImageModel({
+          client,
+          model: aiConfig.image.models.map,
+        }),
+        character: ai.createSeedreamImageModel({
+          client,
+          model: aiConfig.image.models.character,
+        }),
+        faction: ai.createIdeogramImageModel({
+          client,
+          model: aiConfig.image.models.faction,
+        }),
+      };
+    } else {
+      const openAIImageModel = new ai.OpenAIImageGenerateRunnable({
+        apiKey: aiConfig.image.apiKey,
+        model: aiConfig.image.models.map,
+      });
+      imageGenerateModels = {
+        map: openAIImageModel,
+        character: openAIImageModel,
+        faction: openAIImageModel,
+      };
+    }
 
-    // Initialize the image edit runnable
-    const imageEditRunnable = new OpenAIImageEditRunnable({
-      apiKey: process.env.OPENAI_API_KEY,
-      model: 'dall-e-2',
-    });
+    let imageEditModel: ImageEditModel | undefined;
+    const getImageEditModel = (): ImageEditModel => {
+      if (imageEditModel) return imageEditModel;
+
+      const config = aiConfig.imageEdit;
+      assertAIModelConfigured('imageEdit', config);
+      if (config.provider === 'segmind') {
+        throw missingSegmindAdapterError('imageEdit', config);
+      }
+
+      const configuredModel = new ai.OpenAIImageEditRunnable({
+        apiKey: config.apiKey,
+        model: config.model,
+      });
+      imageEditModel = configuredModel;
+      return configuredModel;
+    };
 
     type GenerateBufferArgs = {
       prompt: string;
-      size: '1024x1024' | '1792x1024' | '1024x1792';
+      purpose: ImagePurpose;
+      size: ImageGenerationSize;
     };
 
     const generateImageBuffer = async ({
       prompt,
+      purpose,
       size,
     }: GenerateBufferArgs): Promise<{
       buffer: Buffer;
+      contentType: string;
       revisedPrompt?: string;
     }> => {
-      const result = await imageGenerateRunnable.invoke({
+      const result = await imageGenerateModels[purpose].invoke({
         prompt,
         size,
       });
 
       fastify.log.debug({
-        msg: 'Received image from DALL-E',
+        msg: 'Received generated image',
+        provider: result.providerMeta.provider,
+        model: result.providerMeta.model,
+        requestId: result.providerMeta.requestId,
         revisedPrompt: result.revisedPrompt,
       });
 
@@ -144,6 +195,7 @@ export default fp<ImageGenOptions>(
 
       return {
         buffer: result.imageBuffer,
+        contentType: result.contentType,
         revisedPrompt: result.revisedPrompt,
       };
     };
@@ -151,14 +203,16 @@ export default fp<ImageGenOptions>(
     const uploadBufferToCdn = async ({
       buffer,
       keyPrefix,
+      contentType,
     }: {
       buffer: Buffer;
       keyPrefix: string;
+      contentType: string;
     }) => {
       const uploadResult = await cdnClient.uploadBuffer({
         buffer,
         keyPrefix,
-        contentType: 'image/png',
+        contentType,
       });
 
       fastify.log.info({
@@ -177,6 +231,7 @@ export default fp<ImageGenOptions>(
       keyPrefix: string;
       generateBuffer: () => Promise<{
         buffer: Buffer;
+        contentType: string;
         revisedPrompt?: string;
       }>;
     }) => {
@@ -195,19 +250,36 @@ export default fp<ImageGenOptions>(
         return { ...cached, revisedPrompt: undefined };
       }
 
-      const { buffer, revisedPrompt } = await generateBuffer();
-      const uploadResult = await uploadBufferToCdn({ buffer, keyPrefix });
+      const { buffer, contentType, revisedPrompt } = await generateBuffer();
+      const uploadResult = await uploadBufferToCdn({
+        buffer,
+        keyPrefix,
+        contentType,
+      });
 
       return { ...uploadResult, revisedPrompt };
     };
 
     fastify.decorate('imageGen', {
-      async generateImageToCdn({ prompt, keyPrefix, size = defaultSize }) {
-        const resolvedPrefix = ensureTrailingSlash(keyPrefix);
+      async generateImageToCdn({
+        prompt,
+        keyPrefix,
+        purpose,
+        size = defaultSize,
+      }) {
+        const model = aiConfig.image.models[purpose];
+        const fingerprint = createImageCacheFingerprint({
+          provider: aiConfig.image.provider,
+          model,
+          purpose,
+          prompt,
+          size,
+        });
+        const resolvedPrefix = `${ensureTrailingSlash(keyPrefix)}${fingerprint}/`;
 
         return maybeReuseOrUpload({
           keyPrefix: resolvedPrefix,
-          generateBuffer: () => generateImageBuffer({ prompt, size }),
+          generateBuffer: () => generateImageBuffer({ prompt, purpose, size }),
         });
       },
 
@@ -221,7 +293,7 @@ export default fp<ImageGenOptions>(
         fastify.log.debug({ msg: 'Starting image edit operation' });
 
         // 1) Invoke the image edit runnable
-        const result = await imageEditRunnable.invoke({
+        const result = await getImageEditModel().invoke({
           prompt,
           image,
           mask,
@@ -237,6 +309,7 @@ export default fp<ImageGenOptions>(
         const { key, url } = await uploadBufferToCdn({
           buffer: result.editedImageBuffer,
           keyPrefix: resolvedPrefix,
+          contentType: result.contentType,
         });
 
         return {

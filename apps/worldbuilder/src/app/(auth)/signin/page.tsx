@@ -25,7 +25,13 @@ export default async function SignInPage({
             Use your Google or Facebook account to continue.
           </p>
         </div>
-        <SignInProviders callbackUrl={callbackUrl} />
+        <SignInProviders
+          callbackUrl={callbackUrl}
+          e2eEnabled={
+            process.env.E2E_TEST_MODE === 'true' &&
+            process.env.NODE_ENV !== 'production'
+          }
+        />
         <p className="text-center text-xs text-muted-foreground">
           By continuing you agree to our terms of service and privacy policy.
         </p>

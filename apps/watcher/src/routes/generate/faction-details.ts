@@ -1,11 +1,11 @@
 import { FastifyPluginAsync } from 'fastify';
-import { OpenAIStructuredOutputRunnable } from '@talespin/ai';
 import { PromptTemplate } from '@langchain/core/prompts';
 import {
   FactionFormSchema,
   type FactionForm,
   type World,
 } from '@talespin/schema';
+import { createStructuredOutputModel } from '../../config/models.js';
 
 const promptTemplate = PromptTemplate.fromTemplate(`
 You are a creative world-builder assistant.
@@ -42,20 +42,9 @@ const generateFactionDetails: FastifyPluginAsync = async (fastify) => {
     },
     async (req, reply) => {
       try {
-        if (!process.env.OPENAI_API_KEY) {
-          fastify.log.error('OPENAI_API_KEY is not configured');
-          return reply.status(500).send({
-            error: 'Service configuration error',
-            details: 'AI service is not properly configured',
-          });
-        }
-
         const world = req.body;
 
-        const runnable = new OpenAIStructuredOutputRunnable<FactionForm>({
-          apiKey: process.env.OPENAI_API_KEY,
-          model: 'gpt-4o',
-        });
+        const runnable = createStructuredOutputModel<FactionForm>();
 
         const prompt = await promptTemplate.format({
           name: world.name,

@@ -70,7 +70,14 @@ export const FactionBaseSchema = z.object({
   meta: FactionMetaSchema,
 });
 
-export const FactionFormSchema = FactionBaseSchema;
+export const FactionFormSchema = FactionBaseSchema.extend({
+  previewUrl: z
+    .string()
+    .optional()
+    .describe(
+      'Optional CDN URL for an existing emblem or banner. Leave blank to generate one.',
+    ),
+});
 
 export const FactionSchema = FactionBaseSchema.extend({
   _id: Id,
