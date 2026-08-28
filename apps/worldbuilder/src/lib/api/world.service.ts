@@ -1,7 +1,12 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { WorldQueryParams } from './types';
 import { ApiError } from './errors';
-import { WorldFormSchema, type World, type WorldForm } from '@talespin/schema';
+import {
+  WorldFormSchema,
+  WorldLoreSchema,
+  type World,
+  type WorldForm,
+} from '@talespin/schema';
 import { WorldQueryParamsSchema } from './types';
 import { ImageGenerationService } from './ai-image.service';
 import { GridService } from './grid.service';
@@ -15,6 +20,7 @@ type PrismaWorld = {
   contextWindowLimit: number | null;
   mapImageUrl: string | null;
   settings: Prisma.JsonValue | null;
+  lore: Prisma.JsonValue | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -22,12 +28,14 @@ type PrismaWorld = {
 const worldSelect = {
   select: {
     id: true,
+    version: true,
     name: true,
     description: true,
     theme: true,
     contextWindowLimit: true,
     mapImageUrl: true,
     settings: true,
+    lore: true,
     createdAt: true,
     updatedAt: true,
   },
@@ -101,6 +109,7 @@ export class WorldService {
           theme: data.theme || null,
           contextWindowLimit: data.contextWindowLimit || 1024,
           settings: data.settings || null,
+          lore: data.lore ? (data.lore as Prisma.InputJsonValue) : null,
           mapImageUrl: null, // Will be updated later
         },
         select: worldSelect.select,
@@ -177,6 +186,7 @@ export class WorldService {
           theme: data.theme || null,
           contextWindowLimit: data.contextWindowLimit || 1024,
           settings: data.settings || null,
+          lore: data.lore ? (data.lore as Prisma.InputJsonValue) : null,
           mapImageUrl: data.mapImageUrl || null,
         },
         select: worldSelect.select,
@@ -195,6 +205,9 @@ export class WorldService {
 
   async deleteWorld(id: string): Promise<void> {
     try {
+      await this.prisma.character.deleteMany({ where: { worldId: id } });
+      await this.prisma.region.deleteMany({ where: { worldId: id } });
+      await this.prisma.faction.deleteMany({ where: { worldId: id } });
       await new GridService(this.prisma).cleanup(id);
       await this.prisma.world.delete({
         where: { id },
@@ -219,6 +232,7 @@ export class WorldService {
       contextWindowLimit: world.contextWindowLimit ?? 1024,
       mapImageUrl: world.mapImageUrl || undefined,
       settings: world.settings as World['settings'],
+      lore: world.lore ? WorldLoreSchema.parse(world.lore) : undefined,
       createdAt: world.createdAt.toISOString(),
       updatedAt: world.updatedAt.toISOString(),
     };

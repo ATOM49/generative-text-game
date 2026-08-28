@@ -49,3 +49,9 @@ Current locations are flat points with relative coordinates. A future hierarchy 
 **Status:** Accepted (current)
 
 Prisma remains in worldbuilder and orchestration remains in watcher until multiple consumers or independent testing justify extraction. Do not create empty `agents`, `game-engine`, `persistence`, or `shared` packages solely to match a diagram.
+
+## ADR-009: Regions are semantic grid territories
+
+**Status:** Accepted (current)
+
+A Region owns explicit references to one or more persisted grid cells and normalized map crop bounds. Region descriptions may be proposed from image cut-outs, but deterministic partitioning must cover every grid cell exactly once before persistence. Faction presence is an explicit region field with influence and rationale; it must reference factions created in the same world.

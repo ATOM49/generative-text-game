@@ -18,7 +18,8 @@
   ],
   "scripts": {
     "build": "tsc && vite build",
-    "dev": "vite build --watch"
+    "dev": "vite build --watch",
+    "test": "pnpm build && node --test test/*.test.mjs"
   },
   "dependencies": {
     "minio": "^8.0.1",

@@ -7,6 +7,7 @@
 ```text
 World
 ├── WorldGrid -> GridCell
+├── Region -> GridCell references + faction presence
 ├── Location
 ├── Faction / Culture / Species / Archetype
 ├── Character
@@ -16,7 +17,7 @@ World
 └── PlayerWorldExploration
 ```
 
-`World` is the current aggregate around a setting. Locations use relative coordinates and optional grid-cell references; they are not hierarchical. Characters and factions have stable IDs and structured metadata. `Campaign` currently stores start/end entities, a goal, constraints, and status, but has no Story/Chapter/Mission lifecycle.
+`World` is the current aggregate around a setting. Its optional generated lore keeps downstream content coherent. Regions are semantic map territories with explicit grid-cell references, crop bounds, mission hooks, and typed faction-presence metadata. Locations remain flat points with relative coordinates and optional grid-cell references; they are not hierarchical. Characters and factions have stable IDs and structured metadata. `Campaign` currently stores start/end entities, a goal, constraints, and status, but has no Story/Chapter/Mission lifecycle.
 
 ## Target Narrative Model
 
@@ -49,14 +50,14 @@ The Story should own the plot; chapters and missions advance it. A Story should 
 
 ## Mapping Rules
 
-| Target concept | Current analogue              | Guidance                                                           |
-| -------------- | ----------------------------- | ------------------------------------------------------------------ |
-| Story          | None                          | Add a new aggregate; do not rename `World`.                        |
-| Chapter        | None                          | Add only with explicit progression state.                          |
-| Mission        | `Campaign`, `TreasureHuntRun` | Reuse lessons, not identity; define objectives and terminal rules. |
-| Interaction    | `TreasureHuntEvent`           | Generalize through typed action/outcome contracts.                 |
-| World          | `World`, grid, locations      | Preserve as the reusable setting model.                            |
-| State change   | Event payloads and run fields | Move toward explicit discriminated unions.                         |
+| Target concept | Current analogue                  | Guidance                                                           |
+| -------------- | --------------------------------- | ------------------------------------------------------------------ |
+| Story          | None                              | Add a new aggregate; do not rename `World`.                        |
+| Chapter        | None                              | Add only with explicit progression state.                          |
+| Mission        | `Campaign`, `TreasureHuntRun`     | Reuse lessons, not identity; define objectives and terminal rules. |
+| Interaction    | `TreasureHuntEvent`               | Generalize through typed action/outcome contracts.                 |
+| World          | `World`, grid, regions, locations | Preserve as the reusable setting model.                            |
+| State change   | Event payloads and run fields     | Move toward explicit discriminated unions.                         |
 
 ## Modeling Rules
 

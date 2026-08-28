@@ -141,6 +141,7 @@ model World {
   version                 Int                      @default(1)
   mapImageUrl             String?
   settings                Json?
+  lore                    Json?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   worldGrid               WorldGrid?
@@ -201,6 +202,27 @@ model Faction {
   updatedAt   DateTime        @updatedAt
 
   @@index([worldId, category])
+  @@index([worldId, name])
+}
+
+model Region {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  worldId         String   @db.ObjectId
+  gridId          String   @db.ObjectId
+  cellIds         String[] @db.ObjectId
+  name            String
+  summary         String
+  description     String
+  biome           String
+  atmosphere      String
+  mapBounds       Json
+  missionHooks    String[]
+  factionPresence Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([worldId])
+  @@index([gridId])
   @@index([worldId, name])
 }
 

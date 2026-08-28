@@ -26,21 +26,28 @@ export default function WorldLayout({
   };
 
   // all possible tabs (union of builder/explorer)
-  const allSlugs = ['map', 'factions', 'characters', 'settings', 'character'];
+  const allSlugs = [
+    'map',
+    'regions',
+    'factions',
+    'characters',
+    'settings',
+    'character',
+  ];
 
   return (
     <Tabs
       value={currentSlug}
       onValueChange={handleTabChange}
-      className="w-full flex min-h-screen flex-col h-screen"
+      className="flex h-dvh min-h-0 w-full flex-col overflow-hidden"
     >
       <WorldHorizontalNav worldId={id} />
-      <main className="flex-1 flex flex-col overflow-hidden h-full">
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {allSlugs.map((slug) => (
           <TabsContent
             key={slug}
             value={slug}
-            className="border-none rounded-none overflow-auto h-full flex-1 flex flex-col p-0 m-0"
+            className="m-0 flex min-h-0 flex-1 flex-col overflow-y-auto rounded-none border-none p-0"
           >
             {currentSlug === slug ? children : null}
           </TabsContent>

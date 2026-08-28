@@ -11,12 +11,12 @@ import {
   HorizontalNavContent,
   HorizontalNavFooter,
   HorizontalNavHeader,
-  HorizontalNavScrollArea,
 } from '@/components/ui/horizontal-nav';
 import { Button } from '@/components/ui/button';
 import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { UserAvatarMenu } from '@/components/auth/user-avatar-menu';
+import { LogoutButton } from '@/components/auth/logout-button';
 import { useApiQuery } from '@/hooks/useApiQuery';
 import type { Character } from '@talespin/schema';
 
@@ -28,6 +28,7 @@ type NavItem = {
 
 const BUILDER_ITEMS: NavItem[] = [
   { slug: 'map', label: 'Map' },
+  { slug: 'regions', label: 'Regions' },
   { slug: 'factions', label: 'Factions' },
   { slug: 'characters', label: 'Characters' },
   { slug: 'settings', label: 'Settings' },
@@ -35,6 +36,7 @@ const BUILDER_ITEMS: NavItem[] = [
 
 const EXPLORER_ITEMS: NavItem[] = [
   { slug: 'map', label: 'Map' },
+  { slug: 'regions', label: 'Regions' },
   { slug: 'character', label: 'Character' },
 ];
 
@@ -160,7 +162,10 @@ export function WorldHorizontalNav({
         )}
       </HorizontalNavContent>
       <HorizontalNavFooter>
-        <UserAvatarMenu />
+        <div className="flex items-center gap-1">
+          <UserAvatarMenu />
+          {session?.user ? <LogoutButton compact /> : null}
+        </div>
       </HorizontalNavFooter>
     </HorizontalNav>
   );

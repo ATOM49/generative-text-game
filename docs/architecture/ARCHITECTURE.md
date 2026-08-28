@@ -24,6 +24,8 @@ packages/schema is shared across both applications.
 
 `apps/worldbuilder/src/lib/api/` contains service and DTO mapping logic. `apps/watcher` owns generation routes, prompts, and LangChain runnable composition. `packages/ai` contains provider-facing primitives, not an agent graph. Prisma persistence remains inside worldbuilder.
 
+The streamlined world-creation workflow is a concrete orchestration inside watcher: it enriches one seed, generates a map and factions in parallel, analyzes deterministic map cut-outs into regions, generates faction-grounded characters, then joins regions and factions through validated assignments. Watcher returns a typed proposal; worldbuilder validates references and persists the authoritative package.
+
 ## Mapping from the Proposed Architecture
 
 | Proposed responsibility | Current location                       | Status                                                  |

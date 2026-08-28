@@ -6,7 +6,7 @@ This document combines the current Talespin product with its intended narrative-
 
 ## Product Concept
 
-**Current:** Talespin is a collaborative worldbuilding application. A builder creates a persistent world, map grid, locations, factions, cultures, species, archetypes, and characters. AI generation helps produce structured profiles and artwork. Builder and explorer roles already distinguish content creation from play-oriented access.
+**Current:** Talespin is a collaborative worldbuilding application. A builder can seed a persistent world from a theme and short premise; the generation service expands that seed into a world bible, map, image-grounded regions, factions, faction territory, and recurring characters. Builders can also edit the map grid, locations, cultures, species, archetypes, and characters individually. Builder and explorer roles already distinguish content creation from play-oriented access.
 
 **Target:** Talespin becomes a text-based generative game in which an AI game master operates over durable, structured state. Players should interact with characters, locations, objectives, knowledge, and consequences rather than merely request the next block of prose.
 

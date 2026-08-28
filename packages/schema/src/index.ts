@@ -4,12 +4,14 @@ export * from './enums.js';
 
 // Entity Schemas
 export * from './world.js';
+export * from './world-creation.js';
 export * from './location.js';
 export * from './entity.js';
 export * from './relationship.js';
 export * from './campaign.js';
 export * from './faction.js';
 export * from './character.js';
+export * from './region.js';
 
 // Treasure Hunt Schemas
 export * from './player.js';

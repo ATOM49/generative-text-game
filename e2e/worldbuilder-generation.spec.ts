@@ -1,51 +1,49 @@
-import { expect, test, type Page, type APIResponse } from '@playwright/test';
+import { expect, test, type APIResponse, type Page } from '@playwright/test';
 
-type CreatedWorld = {
-  _id: string;
-  name: string;
-  mapImageUrl?: string;
+type GeneratedWorldResult = {
+  world: {
+    _id: string;
+    name: string;
+    description?: string;
+    mapImageUrl?: string;
+    lore?: { tagline: string; missionSeeds: string[] };
+  };
+  regions: Array<{
+    _id: string;
+    name: string;
+    cellIds: string[];
+    factionPresence: Array<{ factionId: string; rationale: string }>;
+  }>;
+  factions: Array<{ _id: string; name: string; previewUrl?: string }>;
+  characters: Array<{
+    _id: string;
+    name: string;
+    previewUrl?: string;
+    biography?: string;
+    factionIds: string[];
+  }>;
 };
 
-type CreatedFaction = {
-  _id: string;
-  name: string;
-  previewUrl?: string;
-};
-
-type CreatedCharacter = {
-  _id: string;
-  name: string;
-  previewUrl?: string;
-  biography?: string;
-  gallery?: Array<{ imageUrl: string }>;
-};
-
-const waitForCreatedResource = (
-  page: Page,
-  pathname: string,
-): Promise<APIResponse> =>
+const waitForGeneratedWorld = (page: Page): Promise<APIResponse> =>
   page.waitForResponse(
     (response) => {
       const url = new URL(response.url());
       return (
-        response.request().method() === 'POST' && url.pathname === pathname
+        response.request().method() === 'POST' &&
+        url.pathname === '/api/worlds/generate'
       );
     },
-    { timeout: 6 * 60 * 1000 },
+    { timeout: 12 * 60 * 1000 },
   );
 
-test('builder creates a generated world, species, and character', async ({
+test('builder creates a coherent living world from one short seed', async ({
   page,
 }) => {
   test.slow();
 
   const suffix = process.env.E2E_RUN_ID ?? 'playwright';
   const worldName = `E2E Aetherfall ${suffix}`;
-  const speciesName = `Emberkin ${suffix}`;
-  const characterName = `Lyra ${suffix}`;
-  let world: CreatedWorld | undefined;
-  let faction: CreatedFaction | undefined;
-  let character: CreatedCharacter | undefined;
+  let result: GeneratedWorldResult | undefined;
 
   try {
     await page.goto('/signin');
@@ -61,113 +59,83 @@ test('builder creates a generated world, species, and character', async ({
     ).toBeVisible();
 
     await page.getByRole('button', { name: 'New World' }).click();
-    const worldDialog = page.getByRole('dialog', {
-      name: 'Create a New World',
-    });
-    await worldDialog.getByLabel('Name').fill(worldName);
-    await worldDialog
-      .getByLabel('Description')
-      .fill('A floating fantasy archipelago built by the Playwright E2E flow.');
-    await worldDialog.getByLabel('Theme').click();
-    await page.getByRole('option', { name: 'fantasy' }).click();
-
-    const worldResponsePromise = waitForCreatedResource(page, '/api/worlds');
-    await worldDialog.locator('button[type="submit"]').click();
-    const worldResponse = await worldResponsePromise;
-    expect(worldResponse.status()).toBe(201);
-    world = (await worldResponse.json()) as CreatedWorld;
-    expect(world.mapImageUrl).toMatch(/^http:\/\/localhost:9000\/images\//);
-
-    const worldCard = page.getByRole('link', { name: new RegExp(worldName) });
-    await expect(worldCard).toBeVisible();
+    await page.waitForURL('/worlds/new');
     await expect(
-      worldCard.getByRole('img', { name: `${worldName} map` }),
+      page.getByRole('heading', { name: 'Create a living world' }),
     ).toBeVisible();
-    await worldCard.click();
-    await page.waitForURL(`/worlds/${world._id}/map`);
+
+    await page.getByLabel('World name').fill(worldName);
+    await page.getByLabel('Theme').click();
+    await page.getByRole('option', { name: 'Fantasy' }).click();
+    await page
+      .getByLabel('The core idea')
+      .fill(
+        'A floating archipelago rides on sleeping giants while rival lighthouse guilds predict which island will wake next.',
+      );
+
+    const responsePromise = waitForGeneratedWorld(page);
+    await page.getByRole('button', { name: 'Create living world' }).click();
+    await expect(page.getByText('Server working').first()).toBeVisible();
+
+    const response = await responsePromise;
+    expect(response.status()).toBe(201);
+    result = (await response.json()) as GeneratedWorldResult;
+
+    expect(result.world.name).toBe(worldName);
+    expect(result.world.description?.length).toBeGreaterThan(120);
+    expect(result.world.mapImageUrl).toMatch(
+      /^http:\/\/localhost:9000\/images\//,
+    );
+    expect(result.world.lore?.missionSeeds.length).toBeGreaterThanOrEqual(3);
+    expect(result.regions).toHaveLength(5);
+    expect(result.factions).toHaveLength(3);
+    expect(result.characters).toHaveLength(3);
+    expect(
+      result.regions.reduce(
+        (count, region) => count + region.cellIds.length,
+        0,
+      ),
+    ).toBe(64);
+    expect(
+      result.regions.every((region) => region.factionPresence.length > 0),
+    ).toBe(true);
+    expect(
+      result.characters.every(
+        (character) =>
+          Boolean(character.biography) && character.factionIds.length === 1,
+      ),
+    ).toBe(true);
+
+    await page.waitForURL(`/worlds/${result.world._id}/regions`);
+    await expect(
+      page.getByRole('heading', { name: result.world.name }),
+    ).toBeVisible();
+
+    const firstRegion = result.regions[0]!;
+    await expect(
+      page.getByRole('heading', { name: firstRegion.name }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('img', {
+        name: `Map detail showing ${firstRegion.name} in ${result.world.name}`,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(firstRegion.factionPresence[0]!.rationale),
+    ).toBeVisible();
 
     await page.getByRole('tab', { name: 'Factions' }).click();
-    await page.waitForURL(`/worlds/${world._id}/factions`);
-    await page.getByRole('button', { name: 'New Faction' }).click();
-
-    const factionDialog = page.getByRole('dialog', {
-      name: 'Create New Faction',
-    });
-    await factionDialog.getByLabel('Name').fill(speciesName);
-    await factionDialog
-      .getByLabel(/One-line teaser that appears in cards and listings/)
-      .fill('Fire-touched navigators of the floating isles.');
-    await factionDialog
-      .getByLabel(/Long-form description covering politics/)
-      .fill('A luminous species known for ember-bright markings and skyships.');
-    await factionDialog.getByLabel(/Determines whether this entry/).click();
-    await page.getByRole('option', { name: 'species' }).click();
-    await factionDialog
-      .getByLabel(/High-level vibe or mood cues/)
-      .fill('mythic and hopeful');
-
-    const factionResponsePromise = waitForCreatedResource(
-      page,
-      `/api/worlds/${world._id}/factions`,
-    );
-    await factionDialog.locator('button[type="submit"]').click();
-    const factionResponse = await factionResponsePromise;
-    expect(factionResponse.status()).toBe(201);
-    faction = (await factionResponse.json()) as CreatedFaction;
-    expect(faction.previewUrl).toMatch(/^http:\/\/localhost:9000\/images\//);
-
-    await expect(page.getByText(speciesName, { exact: true })).toBeVisible();
-    await page.getByText(speciesName, { exact: true }).click();
-    await expect(page.getByRole('img', { name: speciesName })).toBeVisible();
+    await expect(
+      page.getByText(result.factions[0]!.name, { exact: true }),
+    ).toBeVisible();
 
     await page.getByRole('tab', { name: 'Characters' }).click();
-    await page.waitForURL(`/worlds/${world._id}/characters`);
-    await page.getByRole('button', { name: 'Create Character' }).click();
-
-    const characterDialog = page.getByRole('dialog', {
-      name: 'Create Character',
-    });
-    await characterDialog.getByLabel('Name').fill(characterName);
-    await characterDialog
-      .getByLabel(/Short elevator pitch that introduces the character/)
-      .fill('A young skyship cartographer searching for a lost ember compass.');
-    await characterDialog.getByRole('combobox').click();
-    await page.getByRole('option', { name: speciesName }).click();
-
-    const characterResponsePromise = waitForCreatedResource(
-      page,
-      `/api/worlds/${world._id}/characters`,
-    );
-    await characterDialog
-      .getByRole('button', { name: 'Create Character' })
-      .click();
-    const characterResponse = await characterResponsePromise;
-    expect(characterResponse.status()).toBe(201);
-    character = (await characterResponse.json()) as CreatedCharacter;
-    expect(character.biography).toBeTruthy();
-    expect(character.previewUrl).toMatch(/^http:\/\/localhost:9000\/images\//);
-    expect(character.gallery?.length).toBeGreaterThanOrEqual(2);
-
-    const characterCard = page.getByRole('link', {
-      name: new RegExp(characterName),
-    });
-    await expect(characterCard).toBeVisible();
     await expect(
-      characterCard.getByRole('img', { name: characterName }),
+      page.getByText(result.characters[0]!.name, { exact: true }),
     ).toBeVisible();
   } finally {
-    if (world && character) {
-      await page.request.delete(
-        `/api/worlds/${world._id}/characters/${character._id}`,
-      );
-    }
-    if (world && faction) {
-      await page.request.delete(
-        `/api/worlds/${world._id}/factions/${faction._id}`,
-      );
-    }
-    if (world) {
-      await page.request.delete(`/api/worlds/${world._id}`);
+    if (result?.world._id) {
+      await page.request.delete(`/api/worlds/${result.world._id}`);
     }
   }
 });

@@ -9,3 +9,9 @@ export {
 
 // Mask generation exports
 export { buildInpaintMaskPNG, type BuildInpaintMaskArgs } from './mask.js';
+
+// Image crop exports
+export {
+  cropImageByNormalizedBounds,
+  type NormalizedImageBounds,
+} from './crop.js';

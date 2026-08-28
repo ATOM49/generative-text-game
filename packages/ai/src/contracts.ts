@@ -27,6 +27,31 @@ export interface StructuredOutputModel<T> {
   invoke(input: StructuredOutputInput<T>): Promise<StructuredOutputResult<T>>;
 }
 
+export type MultimodalImageInput =
+  | {
+      type: 'url';
+      url: string;
+    }
+  | {
+      type: 'base64';
+      data: string;
+      mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+    };
+
+export type MultimodalStructuredOutputInput<T> = Omit<
+  StructuredOutputInput<T>,
+  'prompt'
+> & {
+  text: string;
+  image: MultimodalImageInput;
+};
+
+export interface MultimodalStructuredOutputModel<T> {
+  invoke(
+    input: MultimodalStructuredOutputInput<T>,
+  ): Promise<StructuredOutputResult<T>>;
+}
+
 export type ImageGenerationSize = '1024x1024' | '1792x1024' | '1024x1792';
 
 export type ImageGenerationInput = {
