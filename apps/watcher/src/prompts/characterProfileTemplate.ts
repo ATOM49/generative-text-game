@@ -15,7 +15,9 @@ Instructions:
 - Lean into the provided species markers when proposing physiology or customs.
 - Biography should be 2-3 paragraphs with clear motivation and current conflict.
 - Traits must be short punchy phrases (max 6 words each).
-- Prompt hint should summarize wardrobe, palette, and silhouette cues for concept art.
+- Prompt hint should be a precise visual brief covering distinctive body proportions, wardrobe, controlled palette, and silhouette.
+- Prompt hint must name one bespoke signature prop rooted in the character's occupation, history, or species, including its material, wear, and function. Avoid generic swords, staffs, shields, and glowing orbs unless the initial pitch specifically requires one.
+- Prompt hint must describe a characteristic asymmetrical pose in which the character actively uses or carries that prop; avoid a neutral front-facing stance or arms hanging at the sides.
 - Meta descriptors consist of 3-4 entries, each with a label and one-sentence detail.
 - Avoid repeating the character name excessively. Keep language evocative but concise.
 `);

@@ -1,26 +1,26 @@
 import { PromptTemplate } from '@langchain/core/prompts';
+import {
+  HIGH_FIDELITY_PIXEL_ART_DIRECTION,
+  TEXT_FREE_IMAGE_DIRECTION,
+} from './pixel-art-direction.js';
 
 const mapPromptTemplate = PromptTemplate.fromTemplate(`
-Generate a **high-fidelity 8-bit style fantasy map** image from a **top-down perspective**.
+Create a high-fidelity pixel-art world map viewed from directly above.
 
 Theme: {theme}
 Description: {description}
 Settings / Key Features: {settings}
 World Name (Context Only - DO NOT RENDER AS TEXT): {name}
 
-Instructions:
-- The map MUST be viewed from directly above (top-down/bird's-eye view), like a traditional RPG world map or strategic map layout.
-- The map should be rendered in 8-bit/bezel-retro pixel-art style, with vibrant but limited palette typical of classic console graphics.
-- CRITICAL: The image must be completely free of text. NO LABELS, NO LEGENDS, NO TITLE, NO UI.
-- Include clearly defined regions/territories with distinct boundaries.
-- Include terrain features (e.g., mountains, forests, rivers, lakes) and landmarks based on the settings.
-- Use the theme to evoke mood: {theme}.
-- Maintain a flat, overhead perspective throughout - no isometric or angled views.
-- The entire image should be filled with the map itself.
+${HIGH_FIDELITY_PIXEL_ART_DIRECTION}
 
-Prompt: "A text-free, label-free 8-bit pixel-art world map. Top-down overhead view. Theme: {theme}. Terrain details: {description}. Key features: {settings}. The map shows only geography and terrain with distinct regions. Absolutely no text, no writing, no legends, and no interface elements."
-
-Please produce the final prompt for the image model.
+Map-specific direction:
+- Use a strict top-down, bird's-eye projection throughout; no isometric horizon, perspective tilt, frame, or decorative border.
+- Fill the complete square canvas with geography. Show distinct territories through natural terrain transitions rather than drawn boundary lines.
+- Include readable mountains, forests, rivers, lakes, settlements, paths, landmarks, and environmental story details derived from the world description.
+- Keep major landforms and travel routes legible at thumbnail size while rewarding close inspection with clustered pixel detail.
+- Use the theme to drive the palette and mood without weakening terrain readability.
+- ${TEXT_FREE_IMAGE_DIRECTION}
 `);
 
 export { mapPromptTemplate };

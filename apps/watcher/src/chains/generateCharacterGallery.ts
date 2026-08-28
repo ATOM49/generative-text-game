@@ -4,6 +4,10 @@ import { z } from 'zod';
 import turnaroundPlannerTemplate from '../prompts/turnaroundPlannerTemplate.js';
 import type { FastifyInstance } from 'fastify';
 import { createStructuredOutputModel } from '../config/models.js';
+import {
+  buildCharacterGalleryImagePrompt,
+  selectCharacterStagingCue,
+} from '../prompts/character-variation.js';
 
 const TurnaroundShotSchema = z.object({
   angle: z.string().min(1),
@@ -12,6 +16,7 @@ const TurnaroundShotSchema = z.object({
 });
 
 const TurnaroundPlanSchema = z.object({
+  signatureProp: z.string().min(1),
   shots: z.array(TurnaroundShotSchema).min(2).max(3),
 });
 
@@ -22,8 +27,10 @@ export const createCharacterGalleryChain = (fastify: FastifyInstance) => {
   return RunnableSequence.from([
     RunnableLambda.from(
       async (input: { characterBrief: string; slug: string }) => {
+        const stagingCue = selectCharacterStagingCue(input.characterBrief);
         const plannerPrompt = await turnaroundPlannerTemplate.format({
           characterBrief: input.characterBrief,
+          stagingCue,
         });
 
         const { structuredResponse: plan } = await plannerChain.invoke({
@@ -32,7 +39,12 @@ export const createCharacterGalleryChain = (fastify: FastifyInstance) => {
           temperature: 0.6,
         });
 
-        return { plan, slug: input.slug, characterBrief: input.characterBrief };
+        return {
+          plan,
+          slug: input.slug,
+          characterBrief: input.characterBrief,
+          stagingCue,
+        };
       },
     ),
     RunnableLambda.from(
@@ -40,16 +52,23 @@ export const createCharacterGalleryChain = (fastify: FastifyInstance) => {
         plan,
         slug,
         characterBrief,
+        stagingCue,
       }: {
         plan: z.infer<typeof TurnaroundPlanSchema>;
         slug: string;
         characterBrief: string;
+        stagingCue: string;
       }) => {
         const images: z.infer<typeof CharacterGalleryImageSchema>[] = [];
 
         for (const shot of plan.shots) {
-          // Enforce single-subject, full-body portrait orientation and neutral background
-          const enforcedPrompt = `${characterBrief}. ${shot.summary}. ${shot.angle} angle. Render a single instance of the character only (no other figures, duplicates, reflections, or crowd). Full-body, portrait-oriented composition (taller-than-wide). Neutral studio background, no text, logos, or UI elements.`;
+          // Keep model-planned poses inside the shared single-subject art contract.
+          const enforcedPrompt = buildCharacterGalleryImagePrompt({
+            characterBrief,
+            shot,
+            signatureProp: plan.signatureProp,
+            stagingCue,
+          });
 
           const { url: imageUrl, revisedPrompt } =
             await fastify.imageGen.generateImageToCdn({

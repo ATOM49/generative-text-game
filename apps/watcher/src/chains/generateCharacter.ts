@@ -64,7 +64,9 @@ export const createGenerateCharacterFunction = (fastify: FastifyInstance) => {
       species: formatGroups(request.species),
       archetypes: 'None provided',
       traits: formatList(profile.traits),
-      promptHint: profile.promptHint ?? 'Use 8-bit style art. No text overlay.',
+      promptHint:
+        profile.promptHint ??
+        'Use the Talespin high-fidelity cinematic pixel-art house style.',
     });
 
     const slug = slugify(request.name);

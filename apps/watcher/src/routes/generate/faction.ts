@@ -100,7 +100,8 @@ const generateFaction: FastifyPluginAsync = async (fastify) => {
           tone: req.body.tone ?? '–',
           keywords: keywordsText,
           promptHint:
-            req.body.promptHint ?? 'Use painterly realism. No text overlay.',
+            req.body.promptHint ??
+            'Use the Talespin high-fidelity cinematic pixel-art house style.',
         });
 
         let imageUrl: string;
