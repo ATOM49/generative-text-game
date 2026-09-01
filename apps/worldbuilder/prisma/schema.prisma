@@ -52,6 +52,14 @@ enum UserRole {
   EXPLORER
 }
 
+enum WorldGenerationJobStatus {
+  QUEUED
+  GENERATING
+  PERSISTING
+  COMPLETED
+  FAILED
+}
+
 /**
  * ---------- Authentication ----------
  */
@@ -68,6 +76,7 @@ model User {
   accounts Account[]
   sessions Session[]
   authenticators Authenticator[]
+  worldGenerationJobs WorldGenerationJob[]
 }
 
 model Account {
@@ -150,6 +159,26 @@ model World {
   treasureHuntRuns        TreasureHuntRun[]
 
   @@index([name])
+}
+
+model WorldGenerationJob {
+  id             String                   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String                   @db.ObjectId
+  user           User                     @relation(fields: [userId], references: [id])
+  status         WorldGenerationJobStatus @default(QUEUED)
+  seed           Json
+  blueprint      Json?
+  resultWorldId  String?                  @db.ObjectId
+  attempt        Int                      @default(0)
+  error          String?
+  leaseExpiresAt DateTime?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@index([userId, status, updatedAt])
+  @@index([resultWorldId])
 }
 
 /**

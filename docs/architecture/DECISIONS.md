@@ -55,3 +55,9 @@ Prisma remains in worldbuilder and orchestration remains in watcher until multip
 **Status:** Accepted (current)
 
 A Region owns explicit references to one or more persisted grid cells and normalized map crop bounds. Region descriptions may be proposed from image cut-outs, but deterministic partitioning must cover every grid cell exactly once before persistence. Faction presence is an explicit region field with influence and rationale; it must reference factions created in the same world.
+
+## ADR-010: Generated art uses one shared visual contract
+
+**Status:** Accepted (current)
+
+Map, faction, and character generation share a descriptive high-fidelity pixel-art contract owned by watcher prompts. Asset-specific composition may differ, but standalone and world-blueprint paths must reuse the same rendering and text-free constraints. Character variation is deterministic per identity/context and preserves one story-derived signature prop across gallery angles. Provider adapters remain visual-style agnostic, and prompt/provider/model/size changes produce distinct CDN cache identities.

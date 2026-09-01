@@ -20,12 +20,13 @@ placing provider parameters in watcher routes.
 
 ## Installation
 
-This is an internal package within the Talespin monorepo. It's automatically linked via pnpm workspaces.
+This is an internal package linked through the Talespin pnpm workspace. Install once from the repository root; do not add or link it separately.
 
 ```bash
-# Install dependencies from root
-pnpm install
+pnpm install --frozen-lockfile
 ```
+
+See [Local Development](../../docs/LOCAL_DEVELOPMENT.md) for the complete application and provider setup.
 
 ## Building
 
@@ -187,7 +188,7 @@ type OutArgs = {
 ## Testing
 
 ```bash
-# Run tests (requires OPENAI_API_KEY)
+# Run tests; live OpenAI cases skip without OPENAI_API_KEY
 pnpm --filter @talespin/ai test
 
 # Run tests in watch mode

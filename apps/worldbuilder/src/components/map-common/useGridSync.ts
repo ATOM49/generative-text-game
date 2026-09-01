@@ -7,6 +7,7 @@ import type { GridCellMetadata } from '@/components/FabricGrid/types';
 import { useGridStore, type GridState } from '@/state/useGridStore';
 
 export const DEFAULT_CANVAS_WIDTH = 1024;
+const EMPTY_SELECTED_CELL_IDS: string[] = [];
 
 interface GridInput {
   imageUrl: string;
@@ -15,6 +16,7 @@ interface GridInput {
     cells: GridCell[];
   };
   activeCellId?: string | null;
+  selectedCellIds?: string[];
   showGrid?: boolean;
   interactionMode?: 'grid' | 'location' | undefined;
   onCellClick?: (cell: GridCell) => void;
@@ -26,6 +28,7 @@ export function useGridSync({
   imageUrl,
   grid,
   activeCellId,
+  selectedCellIds = EMPTY_SELECTED_CELL_IDS,
   showGrid = true,
   interactionMode,
   onCellClick,
@@ -122,23 +125,39 @@ export function useGridSync({
   );
 
   useEffect(() => {
-    if (!grid || !activeCellId) {
+    if (!grid) {
       clearSelection();
       return;
     }
 
-    const target = grid.cells.find((cell) => cell._id === activeCellId);
-    if (!target) return;
+    const selectedIds = new Set(
+      selectedCellIds.length > 0
+        ? selectedCellIds
+        : activeCellId
+          ? [activeCellId]
+          : [],
+    );
 
-    setSelectedCells([
-      {
+    if (selectedIds.size === 0) {
+      clearSelection();
+      return;
+    }
+
+    const targets = grid.cells.filter((cell) => selectedIds.has(cell._id));
+    if (targets.length === 0) {
+      clearSelection();
+      return;
+    }
+
+    setSelectedCells(
+      targets.map((target) => ({
         cellX: target.x,
         cellY: target.y,
         index: target.y * grid.grid.width + target.x,
         selected: true,
-      },
-    ]);
-  }, [activeCellId, clearSelection, grid, setSelectedCells]);
+      })),
+    );
+  }, [activeCellId, clearSelection, grid, selectedCellIds, setSelectedCells]);
 
   const handleCanvasReady = useCallback((canvas: FabricCanvas | null) => {
     fabricCanvasRef.current = canvas;

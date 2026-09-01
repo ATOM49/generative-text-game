@@ -21,6 +21,12 @@ export interface GridCellMetadata extends BaseGridCellMetadata {
 
 export type OnCellClick = (cells: GridCellMetadata[]) => void;
 
+export interface GridCellVisual {
+  fill: string;
+  hoverFill: string;
+  selectedFill?: string;
+}
+
 export interface FabricGridProps {
   className?: string;
   style?: CSSProperties;
@@ -29,6 +35,7 @@ export interface FabricGridProps {
   onBackgroundError?: (error: Error) => void;
   fogEnabled?: boolean;
   revealedCellIndices?: number[];
+  cellVisuals?: Record<number, GridCellVisual>;
 }
 
 export interface UseFabricGridOptions {
@@ -36,4 +43,5 @@ export interface UseFabricGridOptions {
   onBackgroundError?: (error: Error) => void;
   fogEnabled?: boolean;
   revealedCellIndices?: number[];
+  cellVisuals?: Record<number, GridCellVisual>;
 }

@@ -3,6 +3,7 @@
 import {
   Check,
   Circle,
+  Database,
   Map,
   Network,
   Sparkles,
@@ -12,7 +13,13 @@ import {
 
 import { cn } from '@/lib/utils';
 
-export type GenerationState = 'idle' | 'generating' | 'complete' | 'error';
+export type GenerationState =
+  | 'idle'
+  | 'queued'
+  | 'generating'
+  | 'persisting'
+  | 'complete'
+  | 'error';
 
 const STEPS = [
   {
@@ -45,6 +52,12 @@ const STEPS = [
       'Place factions across suitable regions so the setting is ready for missions.',
     icon: Waypoints,
   },
+  {
+    title: 'Save the world safely',
+    description:
+      'Commit the world, grid, regions, factions, characters, and completed job together.',
+    icon: Database,
+  },
 ] as const;
 
 interface GenerationTimelineProps {
@@ -57,17 +70,26 @@ export function GenerationTimeline({ state }: GenerationTimelineProps) {
       <div>
         <p className="text-sm font-semibold">What Talespin will create</p>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          {state === 'generating'
-            ? 'The server is working through this pipeline. Some stages run in parallel; this request reports completion when the whole world is ready.'
-            : 'Each layer supplies context to the next, while independent work runs in parallel.'}
+          {state === 'queued'
+            ? 'The job is saved and waiting for a worker attempt.'
+            : state === 'generating'
+              ? 'The watcher is building a blueprint. You can leave this page and return to the saved job.'
+              : state === 'persisting'
+                ? 'The blueprint is checkpointed. Talespin is committing the complete world atomically.'
+                : 'Each layer supplies context to the next, while independent work runs in parallel.'}
         </p>
       </div>
 
       <ol className="space-y-3">
         {STEPS.map((step, index) => {
           const Icon = step.icon;
-          const isComplete = state === 'complete';
-          const isWorking = state === 'generating';
+          const isPersistenceStep = index === STEPS.length - 1;
+          const isComplete =
+            state === 'complete' ||
+            (state === 'persisting' && !isPersistenceStep);
+          const isWorking =
+            state === 'generating' ||
+            (state === 'persisting' && isPersistenceStep);
           const isError = state === 'error';
 
           return (
@@ -106,10 +128,14 @@ export function GenerationTimeline({ state }: GenerationTimelineProps) {
                     {isComplete
                       ? 'Complete'
                       : isWorking
-                        ? 'Server working'
-                        : isError
-                          ? 'Not completed'
-                          : 'Planned'}
+                        ? state === 'persisting'
+                          ? 'Saving'
+                          : 'Server working'
+                        : state === 'queued'
+                          ? 'Queued'
+                          : isError
+                            ? 'Not completed'
+                            : 'Planned'}
                   </span>
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

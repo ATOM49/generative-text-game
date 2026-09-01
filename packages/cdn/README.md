@@ -9,9 +9,14 @@ CDN utilities package for Talespin, providing MinIO storage abstraction and Shar
 
 ## Installation
 
+This is an internal package linked through the Talespin pnpm workspace. Install and build it from the repository root:
+
 ```bash
-pnpm add @talespin/cdn
+pnpm install --frozen-lockfile
+pnpm build:cdn
 ```
+
+For local MinIO containers and bucket initialization, follow [Local Development](../../docs/LOCAL_DEVELOPMENT.md). Do not run a second standalone MinIO instance with different credentials or bucket policy.
 
 ## Environment Variables
 
@@ -24,6 +29,8 @@ MINIO_SECRET_KEY=minioadmin
 MINIO_BUCKET=images
 MINIO_PUBLIC_HOST=http://localhost:9000
 ```
+
+These are local-only defaults matching `docker-compose.yml`. Non-local credentials belong in ignored environment files.
 
 ## Usage
 
@@ -105,3 +112,10 @@ Generates an inpainting mask PNG from a polygon region.
 - `dilatePx?: number` - Dilation amount in pixels (default: 2)
 
 **Returns:** `Promise<Buffer>` - PNG mask buffer with transparent region for editing
+
+## Verification
+
+```bash
+pnpm --filter @talespin/cdn test
+pnpm build:cdn
+```

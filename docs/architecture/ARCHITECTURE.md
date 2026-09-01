@@ -14,10 +14,10 @@ apps/worldbuilder (Next.js UI + API routes)
 Prisma -> MongoDB      apps/watcher (Fastify)
                             |          |
                             v          v
-                    packages/ai   packages/cdn
-                            |          |
-                            v          v
-                         OpenAI       MinIO
+                    packages/ai          packages/cdn
+                       |     |                 |
+                       v     v                 v
+                    OpenAI  Segmind           MinIO
 
 packages/schema is shared across both applications.
 ```
@@ -25,6 +25,16 @@ packages/schema is shared across both applications.
 `apps/worldbuilder/src/lib/api/` contains service and DTO mapping logic. `apps/watcher` owns generation routes, prompts, and LangChain runnable composition. `packages/ai` contains provider-facing primitives, not an agent graph. Prisma persistence remains inside worldbuilder.
 
 The streamlined world-creation workflow is a concrete orchestration inside watcher: it enriches one seed, generates a map and factions in parallel, analyzes deterministic map cut-outs into regions, generates faction-grounded characters, then joins regions and factions through validated assignments. Watcher returns a typed proposal; worldbuilder validates references and persists the authoritative package.
+
+## Local Runtime
+
+The supported local stack uses Node 20.19.0, pnpm 10.13.1, Docker Compose, a single-node MongoDB replica set, and MinIO. Shared workspace packages publish local `dist` exports consumed by both apps, so they must be built after a fresh install. Environment templates live beside each app; the authoritative commands and provider choices are documented in [`../LOCAL_DEVELOPMENT.md`](../LOCAL_DEVELOPMENT.md).
+
+## Generated Media Boundary
+
+Watcher owns Talespin's shared high-fidelity pixel-art contract and asset-specific prompt composition. Standalone and full-world generation paths use the same map, faction, and character direction. `packages/ai` maps provider-neutral inputs to OpenAI or Segmind request schemas; `packages/cdn` normalizes and stores outputs in MinIO.
+
+Prompt text, character staging, and Talespin visual rules must not move into provider adapters. Cache identity includes provider, model, purpose, complete prompt, and requested size. See [`GENERATED_ART.md`](GENERATED_ART.md).
 
 ## Mapping from the Proposed Architecture
 

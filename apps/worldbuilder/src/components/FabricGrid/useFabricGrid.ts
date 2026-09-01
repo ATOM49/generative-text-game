@@ -13,11 +13,15 @@ import { useGridStore, type GridState } from '@/state/useGridStore';
 import type { GridCellMetadata, UseFabricGridOptions } from './types';
 import { type CanvasSize, getCellIndex, pointerToCell } from '@/utils/gridMath';
 
+const EMPTY_CELL_VISUALS: NonNullable<UseFabricGridOptions['cellVisuals']> = {};
+const EMPTY_REVEALED_CELL_INDICES: number[] = [];
+
 export function useFabricGrid({
   onCellSelect,
   onBackgroundError,
   fogEnabled = false,
-  revealedCellIndices = [],
+  revealedCellIndices = EMPTY_REVEALED_CELL_INDICES,
+  cellVisuals = EMPTY_CELL_VISUALS,
 }: UseFabricGridOptions = {}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fabricRef = useRef<FabricCanvas | null>(null);
@@ -186,12 +190,13 @@ export function useFabricGrid({
     for (let x = 0; x < cellsX; x += 1) {
       for (let y = 0; y < cellsY; y += 1) {
         const index = getCellIndex(x, y, cellsX);
+        const visual = cellVisuals[index];
         const rect = new FabricRect({
           left: x * cellWidth,
           top: y * cellHeight,
           width: cellWidth,
           height: cellHeight,
-          fill: 'rgba(255,255,255,0)',
+          fill: visual?.fill ?? 'rgba(255,255,255,0)',
           stroke: showGrid ? 'rgba(255,255,255,0.25)' : undefined,
           strokeWidth: showGrid ? 1 : 0,
           selectable: false,
@@ -238,7 +243,7 @@ export function useFabricGrid({
           if (useGridStore.getState().interactionMode !== 'grid') return;
           if (fogEnabled && !metadata.isRevealed) return;
           if (!metadata.selected) {
-            rect.set('fill', 'rgba(59,130,246,0.18)');
+            rect.set('fill', visual?.hoverFill ?? 'rgba(59,130,246,0.18)');
             canvas.requestRenderAll();
           }
         });
@@ -246,7 +251,7 @@ export function useFabricGrid({
         rect.on('mouseout', () => {
           if (fogEnabled && !metadata.isRevealed) return;
           if (!metadata.selected) {
-            rect.set('fill', 'rgba(255,255,255,0)');
+            rect.set('fill', visual?.fill ?? 'rgba(255,255,255,0)');
             canvas.requestRenderAll();
           }
         });
@@ -287,6 +292,7 @@ export function useFabricGrid({
     fogEnabled,
     applyFogState,
     revealCell,
+    cellVisuals,
   ]);
 
   useEffect(() => {
@@ -306,14 +312,17 @@ export function useFabricGrid({
     );
     cellsByIndexRef.current.forEach((metadata, index) => {
       const isSelected = selectedIndices.has(index);
+      const visual = cellVisuals[index];
       metadata.selected = isSelected;
       metadata.rect?.set(
         'fill',
-        isSelected ? 'rgba(37,99,235,0.4)' : 'rgba(255,255,255,0)',
+        isSelected
+          ? (visual?.selectedFill ?? 'rgba(37,99,235,0.4)')
+          : (visual?.fill ?? 'rgba(255,255,255,0)'),
       );
     });
     canvas.requestRenderAll();
-  }, [selectedCells]);
+  }, [cellVisuals, selectedCells]);
 
   useEffect(() => {
     const canvas = fabricRef.current;

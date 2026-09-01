@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { WorldGenerationService } from '@/lib/api/world-generation.service';
 import { handleApiError } from '@/lib/api/errors';
 import { requireUser, BUILDER_ONLY } from '@/lib/auth/guards';
@@ -6,12 +6,15 @@ import { prisma } from '@/lib/prisma';
 
 const worldGenerationService = new WorldGenerationService(prisma);
 
-export async function POST(request: NextRequest) {
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ jobId: string }> },
+) {
   try {
     const user = await requireUser(BUILDER_ONLY);
-    const body = await request.json();
-    const job = await worldGenerationService.createJob(body, user.id);
-    return NextResponse.json(job, { status: 202 });
+    const { jobId } = await context.params;
+    const job = await worldGenerationService.getJob(jobId, user.id);
+    return NextResponse.json(job);
   } catch (error) {
     return handleApiError(error);
   }

@@ -15,4 +15,4 @@ If LangGraph is introduced, create a real orchestration package as described in 
 
 ## Testing
 
-Run `pnpm --filter @talespin/ai test` and `pnpm build:ai`. OpenAI integration cases require `OPENAI_API_KEY` and skip without it. Prefer mocked or fixture-based tests for deterministic behavior; do not assert exact generated prose.
+Install from the repository root with `pnpm install --frozen-lockfile`; this is an internal workspace package and must not be installed or linked separately. Run `pnpm --filter @talespin/ai test` and `pnpm build:ai`. OpenAI integration cases require `OPENAI_API_KEY` and skip without it. Prefer mocked or fixture-based tests for deterministic behavior; do not assert exact generated prose.

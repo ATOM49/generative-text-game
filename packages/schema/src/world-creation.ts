@@ -136,6 +136,34 @@ export const WorldCreationResultSchema = z.object({
   characters: z.array(CharacterSchema),
 });
 
+export const WorldGenerationJobStatusSchema = z.enum([
+  'QUEUED',
+  'GENERATING',
+  'PERSISTING',
+  'COMPLETED',
+  'FAILED',
+]);
+
+export const WorldGenerationJobResultSchema = z.object({
+  worldId: z.string().min(1),
+  regions: z.number().int().nonnegative(),
+  factions: z.number().int().nonnegative(),
+  characters: z.number().int().nonnegative(),
+});
+
+export const WorldGenerationJobSchema = z.object({
+  jobId: z.string().min(1),
+  status: WorldGenerationJobStatusSchema,
+  seed: WorldCreationSeedSchema,
+  attempt: z.number().int().nonnegative(),
+  retryable: z.boolean(),
+  blueprintAvailable: z.boolean(),
+  error: z.string().optional(),
+  result: WorldGenerationJobResultSchema.optional(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
 export type WorldCreationSeed = z.input<typeof WorldCreationSeedSchema>;
 export type ParsedWorldCreationSeed = z.output<typeof WorldCreationSeedSchema>;
 export type EnhancedWorldContext = z.infer<typeof EnhancedWorldContextSchema>;
@@ -148,3 +176,10 @@ export type GeneratedRegionAssignment = z.infer<
 >;
 export type WorldBlueprint = z.infer<typeof WorldBlueprintSchema>;
 export type WorldCreationResult = z.infer<typeof WorldCreationResultSchema>;
+export type WorldGenerationJobStatus = z.infer<
+  typeof WorldGenerationJobStatusSchema
+>;
+export type WorldGenerationJobResult = z.infer<
+  typeof WorldGenerationJobResultSchema
+>;
+export type WorldGenerationJob = z.infer<typeof WorldGenerationJobSchema>;

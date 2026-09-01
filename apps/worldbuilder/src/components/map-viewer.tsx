@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FabricGrid } from '@/components/FabricGrid/FabricGrid';
+import type { GridCellVisual } from '@/components/FabricGrid/types';
 import { useGridSync } from '@/components/map-common/useGridSync';
 import type { GridCell, WorldGrid } from '@talespin/schema';
 
@@ -12,6 +13,7 @@ interface MapViewerProps {
     cells: GridCell[];
   };
   activeCellId?: string | null;
+  selectedCellIds?: string[];
   onCellClick?: (cell: GridCell) => void;
   onCellSelected?: (cell: GridCell | null) => void;
   onCellsSelected?: (cells: GridCell[]) => void;
@@ -19,19 +21,24 @@ interface MapViewerProps {
   fogEnabled?: boolean;
   homeCellId?: string;
   revealedCellIds?: string[];
+  cellVisuals?: Record<number, GridCellVisual>;
 }
+
+const EMPTY_REVEALED_CELL_IDS: string[] = [];
 
 export function MapViewer({
   imageUrl,
   grid,
   activeCellId,
+  selectedCellIds,
   onCellClick,
   onCellSelected,
   onCellsSelected,
   showGrid = true,
   fogEnabled = false,
   homeCellId,
-  revealedCellIds = [],
+  revealedCellIds = EMPTY_REVEALED_CELL_IDS,
+  cellVisuals,
 }: MapViewerProps) {
   const resolvedHomeCellId = homeCellId ?? grid?.grid.homeCellId ?? null;
   const gridId = grid?.grid._id ?? null;
@@ -112,6 +119,7 @@ export function MapViewer({
     imageUrl,
     grid,
     activeCellId,
+    selectedCellIds,
     showGrid,
     interactionMode: 'grid',
     onCellClick: handleFogAwareCellClick,
@@ -150,6 +158,7 @@ export function MapViewer({
           }
           fogEnabled={fogEnabled}
           revealedCellIndices={fogEnabled ? revealedCellIndices : undefined}
+          cellVisuals={cellVisuals}
         />
       </div>
     </div>

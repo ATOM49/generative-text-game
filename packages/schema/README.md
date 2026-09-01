@@ -15,6 +15,17 @@ A centralized schema management package that provides type-safe validation and f
 - **TypeScript**: Type definitions and compile-time safety
 - **Vite**: Fast build tooling
 
+## Workspace Setup
+
+This is an internal package linked through the Talespin pnpm workspace. From the repository root:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build:schema
+```
+
+See [Local Development](../../docs/LOCAL_DEVELOPMENT.md) for the complete application, database, and provider setup.
+
 ## Adding a New Entity
 
 Follow these steps to add a new entity schema:
@@ -57,7 +68,7 @@ export * from './my-entity';
 ### 3. Build the Package
 
 ```bash
-pnpm build
+pnpm build:schema
 ```
 
 ## Adding to MongoDB Schema
@@ -83,14 +94,13 @@ model MyEntity {
 ### 2. Generate Prisma Client
 
 ```bash
-cd ../../apps/worldbuilder
-pnpm dlx prisma generate
+pnpm --filter @talespin/worldbuilder exec prisma generate
 ```
 
 ### 3. Push to Database
 
 ```bash
-pnpm dlx prisma db push
+pnpm --filter @talespin/worldbuilder exec prisma db push
 ```
 
 ### 4. Restart Worldbuilder
@@ -98,6 +108,8 @@ pnpm dlx prisma db push
 ```bash
 pnpm dev
 ```
+
+MongoDB must have the `rs0` replica set initialized before `prisma db push`. Follow the root local-development guide rather than creating a package-specific database setup.
 
 ## Usage Examples
 
@@ -128,13 +140,15 @@ return <AutoForm schema={schemaProvider} onSubmit={handleSubmit} />;
 ```
 packages/schema/
 ├── src/
-│   ├── index.ts          # Main export file
-│   ├── common.ts         # Shared types and utilities
-│   ├── enums.ts          # Common enumerations
-│   ├── world.ts          # World entity schemas
-│   ├── location.ts       # Location entity schemas
-│   ├── grid-cell.ts      # Grid cell schemas
-│   └── entities/         # Additional entity schemas
+│   ├── index.ts                    # Public exports
+│   ├── common.ts                   # Shared IDs and utilities
+│   ├── world.ts                    # Persisted world contracts
+│   ├── world-creation.ts           # Generated blueprint contracts
+│   ├── region.ts                   # Semantic map territories
+│   ├── faction.ts                  # Faction/culture/species contracts
+│   ├── character.ts                # Character and gallery contracts
+│   ├── treasure-hunt-run.ts        # Persistent loop state
+│   └── treasure-hunt-event.ts      # Structured gameplay events
 ├── package.json
 └── vite.config.ts
 ```

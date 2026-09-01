@@ -1,5 +1,7 @@
 # Plugins Folder
 
+The complete service and MinIO setup lives in [Local Development](../../../../docs/LOCAL_DEVELOPMENT.md). Generated-media rules live in [Generated Art Direction](../../../../docs/architecture/GENERATED_ART.md).
+
 Plugins define behavior that is common to all the routes in your
 application. Authentication, caching, templates, and all the other cross
 cutting concerns should be handled by plugins placed in this folder.
@@ -45,6 +47,8 @@ Segmind is the image-generation default when `SEGMIND_API_KEY` is present. Nano 
 **Dependencies**: `@talespin/ai`, `@talespin/cdn`, `cdn` plugin
 
 **Environment Variables**: See `apps/watcher/.env.example`. Credentials stay server-side.
+
+Prompt composition remains outside this plugin. It receives complete prompts from watcher chains and selects provider adapters by purpose; shared art direction belongs under `src/prompts/`.
 
 ---
 

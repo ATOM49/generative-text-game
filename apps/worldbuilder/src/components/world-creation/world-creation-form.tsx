@@ -1,13 +1,20 @@
 'use client';
 
 import type { FormEvent } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  RefreshCcw,
+  Sparkles,
+} from 'lucide-react';
 import {
   WorldCreationSeedSchema,
-  type WorldCreationResult,
+  WorldGenerationJobSchema,
   type WorldCreationSeed,
+  type WorldGenerationJob,
 } from '@talespin/schema';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -42,28 +49,13 @@ const THEME_OPTIONS = [
   { value: 'post‑apocalyptic', label: 'Post-apocalyptic' },
 ] as const;
 
-type CreationSummary = {
-  worldId: string;
-  regions: number;
-  factions: number;
-  characters: number;
-};
+const ACTIVE_JOB_KEY = 'talespin:active-world-generation-job';
+const POLL_INTERVAL_MS = 2000;
+
+type CreationSummary = NonNullable<WorldGenerationJob['result']>;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-
-const summarizeResult = (result: WorldCreationResult): CreationSummary => {
-  if (!result.world._id) {
-    throw new Error('The generated world response did not include a world ID.');
-  }
-
-  return {
-    worldId: result.world._id,
-    regions: result.regions.length,
-    factions: result.factions.length,
-    characters: result.characters.length,
-  };
-};
 
 const getErrorMessage = async (response: Response) => {
   const fallback = 'World generation failed. Please try again.';
@@ -79,19 +71,62 @@ const getErrorMessage = async (response: Response) => {
   return `${fallback} (${response.status})`;
 };
 
+const parseJobResponse = async (response: Response) => {
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+  return WorldGenerationJobSchema.parse(await response.json());
+};
+
+const stateForJob = (job: WorldGenerationJob): GenerationState => {
+  if (
+    job.retryable &&
+    (job.status === 'GENERATING' || job.status === 'PERSISTING')
+  ) {
+    return 'error';
+  }
+
+  switch (job.status) {
+    case 'QUEUED':
+      return 'queued';
+    case 'GENERATING':
+      return 'generating';
+    case 'PERSISTING':
+      return 'persisting';
+    case 'COMPLETED':
+      return 'complete';
+    case 'FAILED':
+      return 'error';
+  }
+};
+
 export function WorldCreationForm() {
   const router = useRouter();
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runnerInFlightRef = useRef(false);
+  const autoStartedAttemptsRef = useRef(new Set<string>());
+  const latestJobRef = useRef<WorldGenerationJob | null>(null);
   const [name, setName] = useState('');
   const [theme, setTheme] = useState('');
   const [description, setDescription] = useState('');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [job, setJob] = useState<WorldGenerationJob | null>(null);
   const [generationState, setGenerationState] =
     useState<GenerationState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<CreationSummary | null>(null);
+  const [isCreatingJob, setIsCreatingJob] = useState(false);
+  const [isStartingRunner, setIsStartingRunner] = useState(false);
+  const [isRecoveringJob, setIsRecoveringJob] = useState(true);
 
-  const isGenerating = generationState === 'generating';
-  const canSubmit = theme.length > 0 && description.trim().length > 0;
+  const isLocked = Boolean(jobId) || isCreatingJob;
+  const isServerWorking =
+    isStartingRunner ||
+    (job != null &&
+      !job.retryable &&
+      (job.status === 'GENERATING' || job.status === 'PERSISTING'));
+  const canSubmit =
+    !isRecoveringJob && theme.length > 0 && description.trim().length > 0;
 
   const completionItems = summary
     ? [
@@ -101,22 +136,191 @@ export function WorldCreationForm() {
       ]
     : [];
 
+  const enterWorld = useCallback(
+    (worldId: string) => {
+      router.replace(`/worlds/${encodeURIComponent(worldId)}/regions`);
+    },
+    [router],
+  );
+
+  const rememberJob = useCallback(
+    (nextJobId: string) => {
+      window.localStorage.setItem(ACTIVE_JOB_KEY, nextJobId);
+      setJobId(nextJobId);
+      router.replace(`/worlds/new?job=${encodeURIComponent(nextJobId)}`, {
+        scroll: false,
+      });
+    },
+    [router],
+  );
+
+  const applyJob = useCallback(
+    (nextJob: WorldGenerationJob) => {
+      const currentJob = latestJobRef.current;
+      if (
+        currentJob &&
+        (currentJob.status === 'COMPLETED' ||
+          nextJob.attempt < currentJob.attempt ||
+          (nextJob.attempt === currentJob.attempt &&
+            Date.parse(nextJob.updatedAt) < Date.parse(currentJob.updatedAt)))
+      ) {
+        return;
+      }
+      latestJobRef.current = nextJob;
+      setJob(nextJob);
+      setJobId(nextJob.jobId);
+      setName(nextJob.seed.name ?? '');
+      setTheme(nextJob.seed.theme);
+      setDescription(nextJob.seed.description);
+      setGenerationState(stateForJob(nextJob));
+      setError(nextJob.error ?? null);
+
+      if (nextJob.status === 'COMPLETED' && nextJob.result) {
+        setSummary(nextJob.result);
+        window.localStorage.removeItem(ACTIVE_JOB_KEY);
+        if (!redirectTimerRef.current) {
+          redirectTimerRef.current = setTimeout(() => {
+            enterWorld(nextJob.result!.worldId);
+          }, 1800);
+        }
+      } else {
+        setSummary(null);
+      }
+    },
+    [enterWorld],
+  );
+
+  const loadJob = useCallback(
+    async (nextJobId: string) => {
+      const response = await fetch(
+        `/api/worlds/generate/${encodeURIComponent(nextJobId)}`,
+        { credentials: 'same-origin', cache: 'no-store' },
+      );
+      const nextJob = await parseJobResponse(response);
+      applyJob(nextJob);
+      return nextJob;
+    },
+    [applyJob],
+  );
+
+  const runJob = useCallback(
+    async (nextJobId: string) => {
+      if (runnerInFlightRef.current) return;
+      runnerInFlightRef.current = true;
+      setIsStartingRunner(true);
+      setError(null);
+
+      try {
+        const response = await fetch(
+          `/api/worlds/generate/${encodeURIComponent(nextJobId)}/run`,
+          { method: 'POST', credentials: 'same-origin' },
+        );
+        if (response.status === 409) {
+          await loadJob(nextJobId);
+          return;
+        }
+        applyJob(await parseJobResponse(response));
+      } catch (caught) {
+        const runnerError =
+          caught instanceof Error
+            ? caught.message
+            : 'Unable to start the saved world generation job.';
+        let refreshedJob: WorldGenerationJob | undefined;
+        try {
+          refreshedJob = await loadJob(nextJobId);
+        } catch {
+          // The runner error below remains the actionable status.
+        }
+        if (!refreshedJob || refreshedJob.retryable) {
+          setError(runnerError);
+        }
+      } finally {
+        runnerInFlightRef.current = false;
+        setIsStartingRunner(false);
+      }
+    },
+    [applyJob, loadJob],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const recover = async () => {
+      const urlJobId = new URL(window.location.href).searchParams.get('job');
+      const savedJobId = window.localStorage.getItem(ACTIVE_JOB_KEY);
+      const recoverableJobId = urlJobId || savedJobId;
+      if (!recoverableJobId) {
+        setIsRecoveringJob(false);
+        return;
+      }
+
+      try {
+        rememberJob(recoverableJobId);
+        await loadJob(recoverableJobId);
+      } catch (caught) {
+        if (!cancelled) {
+          setError(
+            caught instanceof Error
+              ? caught.message
+              : 'Unable to recover the saved world generation job.',
+          );
+        }
+      } finally {
+        if (!cancelled) setIsRecoveringJob(false);
+      }
+    };
+
+    void recover();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadJob, rememberJob]);
+
+  useEffect(() => {
+    if (
+      !jobId ||
+      job?.status === 'COMPLETED' ||
+      job?.status === 'FAILED' ||
+      (job?.retryable && job.status !== 'QUEUED')
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      try {
+        await loadJob(jobId);
+      } catch {
+        // A later poll or the runner response can still recover status.
+      } finally {
+        if (!cancelled) timeout = setTimeout(poll, POLL_INTERVAL_MS);
+      }
+    };
+    timeout = setTimeout(poll, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [job, jobId, loadJob]);
+
+  useEffect(() => {
+    if (job?.status !== 'QUEUED') return;
+    const attemptKey = `${job.jobId}:${job.attempt}`;
+    if (autoStartedAttemptsRef.current.has(attemptKey)) return;
+    autoStartedAttemptsRef.current.add(attemptKey);
+    void runJob(job.jobId);
+  }, [job, runJob]);
+
   useEffect(
     () => () => {
-      if (redirectTimerRef.current) {
-        clearTimeout(redirectTimerRef.current);
-      }
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
     },
     [],
   );
 
-  const enterWorld = (worldId: string) => {
-    router.replace(`/worlds/${encodeURIComponent(worldId)}/regions`);
-  };
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isGenerating) return;
+    if (isLocked || isRecoveringJob) return;
 
     setError(null);
     setSummary(null);
@@ -136,7 +340,8 @@ export function WorldCreationForm() {
       return;
     }
 
-    setGenerationState('generating');
+    setIsCreatingJob(true);
+    setGenerationState('queued');
 
     try {
       const seed: WorldCreationSeed = parsed.data;
@@ -146,19 +351,9 @@ export function WorldCreationForm() {
         credentials: 'same-origin',
         body: JSON.stringify(seed),
       });
-
-      if (!response.ok) {
-        throw new Error(await getErrorMessage(response));
-      }
-
-      const result = (await response.json()) as WorldCreationResult;
-      const nextSummary = summarizeResult(result);
-      setSummary(nextSummary);
-      setGenerationState('complete');
-
-      redirectTimerRef.current = setTimeout(() => {
-        enterWorld(nextSummary.worldId);
-      }, 1800);
+      const createdJob = await parseJobResponse(response);
+      rememberJob(createdJob.jobId);
+      applyJob(createdJob);
     } catch (caught) {
       setGenerationState('error');
       setError(
@@ -166,7 +361,28 @@ export function WorldCreationForm() {
           ? caught.message
           : 'World generation failed. Please try again.',
       );
+    } finally {
+      setIsCreatingJob(false);
     }
+  };
+
+  const handleRetry = () => {
+    if (!job || !job.retryable || isStartingRunner) return;
+    autoStartedAttemptsRef.current.add(`${job.jobId}:${job.attempt}`);
+    setGenerationState(job.blueprintAvailable ? 'persisting' : 'queued');
+    void runJob(job.jobId);
+  };
+
+  const handleStartOver = () => {
+    if (isServerWorking) return;
+    window.localStorage.removeItem(ACTIVE_JOB_KEY);
+    setJobId(null);
+    setJob(null);
+    latestJobRef.current = null;
+    setSummary(null);
+    setError(null);
+    setGenerationState('idle');
+    router.replace('/worlds/new', { scroll: false });
   };
 
   return (
@@ -190,7 +406,7 @@ export function WorldCreationForm() {
                 placeholder="Optional — Talespin can name it"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                disabled={isGenerating || generationState === 'complete'}
+                disabled={isLocked}
                 autoComplete="off"
               />
               <p className="text-xs text-muted-foreground">
@@ -203,7 +419,7 @@ export function WorldCreationForm() {
               <Select
                 value={theme}
                 onValueChange={setTheme}
-                disabled={isGenerating || generationState === 'complete'}
+                disabled={isLocked}
                 required
               >
                 <SelectTrigger id="world-theme" className="w-full">
@@ -228,7 +444,7 @@ export function WorldCreationForm() {
                 className="min-h-36 resize-y leading-relaxed"
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                disabled={isGenerating || generationState === 'complete'}
+                disabled={isLocked}
                 required
               />
               <p className="text-xs text-muted-foreground">
@@ -240,7 +456,32 @@ export function WorldCreationForm() {
             {error && (
               <Alert variant="destructive">
                 <AlertTitle>Creation paused</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>
+                  <p>{error}</p>
+                  {job?.blueprintAvailable && (
+                    <p className="mt-2">
+                      Your completed blueprint is saved; retrying will reuse it
+                      instead of calling the watcher again.
+                    </p>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {job && !summary && !error && (
+              <Alert>
+                <AlertTitle>
+                  {job.status === 'QUEUED'
+                    ? 'Creation job queued'
+                    : job.status === 'PERSISTING'
+                      ? 'Blueprint saved'
+                      : 'Creation in progress'}
+                </AlertTitle>
+                <AlertDescription>
+                  Attempt {job.attempt || 1}. This page is polling the saved
+                  job; you can return with this URL if the request is
+                  interrupted.
+                </AlertDescription>
               </Alert>
             )}
 
@@ -270,15 +511,26 @@ export function WorldCreationForm() {
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => router.push('/')}
-                disabled={isGenerating}
-              >
-                <ArrowLeft />
-                Back to worlds
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => router.push('/')}
+                  disabled={isServerWorking}
+                >
+                  <ArrowLeft />
+                  Back to worlds
+                </Button>
+                {jobId && job?.status !== 'COMPLETED' && !isServerWorking && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleStartOver}
+                  >
+                    Start over
+                  </Button>
+                )}
+              </div>
               {summary ? (
                 <Button
                   type="button"
@@ -287,15 +539,47 @@ export function WorldCreationForm() {
                   Enter world
                   <ArrowRight />
                 </Button>
+              ) : job?.retryable ? (
+                <Button
+                  type="button"
+                  size="lg"
+                  onClick={handleRetry}
+                  disabled={isStartingRunner}
+                >
+                  <RefreshCcw />
+                  {isStartingRunner
+                    ? 'Starting saved job…'
+                    : job.blueprintAvailable
+                      ? 'Resume saved blueprint'
+                      : job.attempt === 0
+                        ? 'Start saved job'
+                        : 'Retry creation'}
+                </Button>
+              ) : job ? (
+                <Button type="button" size="lg" disabled>
+                  <Sparkles />
+                  {job.status === 'PERSISTING'
+                    ? 'Saving your world…'
+                    : 'Creating your world…'}
+                </Button>
+              ) : jobId ? (
+                <Button
+                  type="button"
+                  size="lg"
+                  onClick={() => void loadJob(jobId)}
+                >
+                  <RefreshCcw />
+                  Retry job status
+                </Button>
               ) : (
                 <Button
                   type="submit"
                   size="lg"
-                  disabled={!canSubmit || isGenerating}
+                  disabled={!canSubmit || isCreatingJob}
                 >
                   <Sparkles />
-                  {isGenerating
-                    ? 'Creating your world…'
+                  {isCreatingJob
+                    ? 'Saving creation job…'
                     : 'Create living world'}
                 </Button>
               )}

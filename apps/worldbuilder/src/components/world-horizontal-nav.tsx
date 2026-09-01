@@ -17,8 +17,6 @@ import { TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { UserAvatarMenu } from '@/components/auth/user-avatar-menu';
 import { LogoutButton } from '@/components/auth/logout-button';
-import { useApiQuery } from '@/hooks/useApiQuery';
-import type { Character } from '@talespin/schema';
 
 type NavItem = {
   slug: string;
@@ -28,7 +26,6 @@ type NavItem = {
 
 const BUILDER_ITEMS: NavItem[] = [
   { slug: 'map', label: 'Map' },
-  { slug: 'regions', label: 'Regions' },
   { slug: 'factions', label: 'Factions' },
   { slug: 'characters', label: 'Characters' },
   { slug: 'settings', label: 'Settings' },
@@ -36,7 +33,6 @@ const BUILDER_ITEMS: NavItem[] = [
 
 const EXPLORER_ITEMS: NavItem[] = [
   { slug: 'map', label: 'Map' },
-  { slug: 'regions', label: 'Regions' },
   { slug: 'character', label: 'Character' },
 ];
 
@@ -66,19 +62,6 @@ export function WorldHorizontalNav({
     const parts = pathname.split('/');
     return parts[2];
   }, [pathname, providedWorldId]);
-
-  // If the user is an explorer (not a builder), fetch whether they have a
-  // player-character for this world so we can disable the Map tab when
-  // appropriate.
-  const { data: playerCharacter, isLoading: playerCharacterLoading } =
-    useApiQuery<Character | null>(
-      worldId
-        ? `/api/worlds/${worldId}/player-character`
-        : `/api/worlds/none/player-character`,
-    );
-
-  const disableMap =
-    !userIsBuilder && !playerCharacterLoading && !playerCharacter?._id;
 
   const activeSlug = useMemo(() => {
     if (!menuItems.length) {
@@ -123,17 +106,13 @@ export function WorldHorizontalNav({
         {hasMenu ? (
           <TabsList className="flex w-full h-full flex-wrap items-center justify-center gap-4 bg-transparent p-0 text-sidebar-foreground/70">
             {menuItems.map(({ slug, label, hasUpdate }) => {
-              const isMap = slug === 'map';
-              const isDisabled = isMap && disableMap;
               return (
                 <TabsTrigger
                   key={slug}
                   value={slug}
                   onClick={() => handleTabChange(slug)}
-                  aria-disabled={isDisabled}
                   className={cn(
                     'relative flex flex-col items-center justify-center gap-1 rounded-none bg-transparent px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200',
-                    isDisabled ? 'opacity-40 cursor-not-allowed' : '',
                     activeSlug === slug
                       ? 'text-sidebar-accent-foreground'
                       : 'text-sidebar-foreground/70',

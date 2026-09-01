@@ -1,76 +1,69 @@
-## Talespin Worldbuilder
+# Talespin Worldbuilder
 
-The worldbuilder app is a Next.js 15 client for creating and curating Talespin worlds. It relies on MongoDB via Prisma, the shared `@talespin/schema` package, and now uses **NextAuth** with Google and Facebook providers for authentication.
+`@talespin/worldbuilder` is the Next.js 15 UI and current application/persistence boundary. It owns Auth.js/NextAuth, builder/explorer authorization, API routes, Prisma services, MongoDB persistence, and calls to watcher.
 
-## Getting Started
+Use the root [Local Development](../../docs/LOCAL_DEVELOPMENT.md) guide for the complete MongoDB, MinIO, watcher, and shared-package setup.
+
+## Environment
 
 ```bash
-# From repo root
-pnpm install
+cp apps/worldbuilder/.env.example apps/worldbuilder/.env
+```
 
-# Generate Prisma client after any schema change
+The template defaults to the development-only E2E credentials account. Generate `NEXTAUTH_SECRET` with `openssl rand -base64 32`, start the stack, then use **Continue with E2E account** and choose `BUILDER` during onboarding.
+
+For production-like authentication, set `E2E_TEST_MODE=false` and configure both Google and Facebook credentials. Because the current auth module initializes both providers, all four OAuth values are required. Only `NEXT_PUBLIC_COPILOT_CLOUD_PUBLIC_API_KEY` is browser-visible; database, auth, OAuth, and watcher values must remain server-side.
+
+## Development
+
+From the repository root:
+
+```bash
+pnpm build:schema
 pnpm --filter @talespin/worldbuilder exec prisma generate
-
-# Start the Next.js dev server on :3000
+pnpm --filter @talespin/worldbuilder exec prisma db push
 pnpm dev:world
 ```
 
-### Required Environment Variables
+Worldbuilder runs at <http://localhost:3000> and expects watcher at `WATCHER_API_URL`, normally <http://localhost:4000>.
 
-Create `apps/worldbuilder/.env` (or populate your shared env) with the following:
+## Authentication and Roles
 
-```env
-DATABASE_URL="mongodb://localhost:27017/talespin?replicaSet=rs0"
-WATCHER_API_URL="http://localhost:4000"
-WATCHER_GENERATION_TIMEOUT_MS="180000"
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="generate-a-long-random-string"
+- Sessions use the JWT strategy while users and provider accounts are stored through Prisma.
+- New users must choose `BUILDER` or `EXPLORER` during onboarding.
+- Builders can create and mutate worlds; explorers can browse but cannot use builder-only mutations.
+- Authorization is enforced in server routes as well as hidden in the UI.
 
-# OAuth providers
-GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET="..."
-FACEBOOK_CLIENT_ID="..."
-FACEBOOK_CLIENT_SECRET="..."
-
-NEXT_PUBLIC_COPILOT_CLOUD_PUBLIC_API_KEY="..."
-```
-
-Restart `pnpm dev:world` any time you change `NEXTAUTH_*` or provider credentials.
-
-### Browser E2E
-
-Install Chromium once with `pnpm test:e2e:install`, then run
-`pnpm test:e2e:local` from the repository root. The command starts MongoDB and
-MinIO, launches watcher on port 4100 and worldbuilder on port 3100, and runs the
-Playwright builder flow. A credentials provider is exposed only when
-`E2E_TEST_MODE=true` in a non-production process. Failure traces, screenshots,
-and videos are written under `test-results/`.
-
-### Authentication & Roles
-
-- Sign-in is handled by NextAuth (JWT session strategy) with Google and Facebook providers.
-- A `User` + `Account` schema has been added to Prisma. New users must choose between `BUILDER` and `EXPLORER` roles during onboarding.
-- **Builder** role enables world creation, map editing, and access to watcher-backed mutations. Explorers can browse maps and data but cannot mutate.
-- Promote a user by updating their record via Prisma Studio or `mongosh`. Example:
+Inspect local records with:
 
 ```bash
-# Open Prisma Studio and edit the user entry's role column
 pnpm --filter @talespin/worldbuilder exec prisma studio
 ```
 
-### Prisma Maintenance
+## Prisma Changes
+
+Prisma is the persistence representation, not the domain-contract source of truth. Update `packages/schema`, Prisma models, service DTO mappings, and affected API consumers together.
 
 ```bash
-# Re-generate client after schema changes
+pnpm build:schema
 pnpm --filter @talespin/worldbuilder exec prisma generate
-
-# Push schema to MongoDB (requires replica set)
-cd apps/worldbuilder
-pnpm dlx prisma db push
+pnpm --filter @talespin/worldbuilder exec prisma db push
 ```
 
-### Development Tips
+MongoDB must have the `rs0` replica set initialized as described in the local-development guide.
 
-- Protected routes: All `/api/*` endpoints (except `/api/auth/*`) and worldbuilder pages now require an authenticated session. Unauthenticated users are redirected to `/signin`.
-- The `/signin` page exposes Google and Facebook buttons. Callback URLs inherit the page you attempted to visit.
-- Builder-only UI affordances (create world dialog, grid editors, watcher calls) are hidden from explorers, but server routes also enforce roles for defense in depth.
+## Verification
+
+```bash
+pnpm build:world
+pnpm lint
+```
+
+For UI changes, verify both roles and capture screenshots. The root Playwright flow uses worldbuilder port `3100`, watcher port `4100`, and a development-only credentials provider:
+
+```bash
+pnpm test:e2e:install
+pnpm test:e2e:local
+```
+
+The browser flow can invoke paid AI providers and writes artifacts under `test-results/`.

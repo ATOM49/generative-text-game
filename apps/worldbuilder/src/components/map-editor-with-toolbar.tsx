@@ -8,11 +8,16 @@ import {
   type TPointerEventInfo,
 } from 'fabric';
 import { FabricGrid } from '@/components/FabricGrid/FabricGrid';
-import type { GridCellMetadata } from '@/components/FabricGrid/types';
+import type { GridCellVisual } from '@/components/FabricGrid/types';
 import { useGridStore, type GridState } from '@/state/useGridStore';
 import { useGridSync } from '@/components/map-common/useGridSync';
-import { Drawer, DrawerContent } from '@/components/ui/drawer';
-import { MapToolbox, type Tool } from '@/components/map-toolbox';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerTitle,
+} from '@/components/ui/drawer';
+import type { Tool } from '@/components/map-toolbox';
 
 interface RelativeShape {
   id: string;
@@ -27,6 +32,9 @@ interface MapEditorWithToolbarProps {
     cells: GridCell[];
   };
   activeCellId?: string | null;
+  selectedCellIds?: string[];
+  showGrid?: boolean;
+  cellVisuals?: Record<number, GridCellVisual>;
   onCellClick?: (cell: GridCell) => void;
   onCellSelected?: (cell: GridCell | null) => void;
   onCellsSelected?: (cells: GridCell[]) => void;
@@ -37,12 +45,13 @@ interface MapEditorWithToolbarProps {
   renderCellDetails?: (cell: GridCell, onClose: () => void) => React.ReactNode;
 }
 
-const DEFAULT_CANVAS_WIDTH = 1024;
-
 export function MapEditorWithToolbar({
   imageUrl,
   grid,
   activeCellId,
+  selectedCellIds,
+  showGrid = true,
+  cellVisuals,
   onCellClick,
   onCellSelected,
   onCellsSelected,
@@ -54,19 +63,6 @@ export function MapEditorWithToolbar({
   const fabricCanvasRef = useRef<FabricCanvas | null>(null);
   const shapeObjectsRef = useRef<Record<string, FabricCircle>>({});
 
-  const config = useGridStore((state: GridState) => state.config);
-  const worldImageUrl = useGridStore((state: GridState) => state.worldImageUrl);
-  const setConfig = useGridStore((state: GridState) => state.setConfig);
-  const setWorldImage = useGridStore((state: GridState) => state.setWorldImage);
-  const setSelectedCells = useGridStore(
-    (state: GridState) => state.setSelectedCells,
-  );
-  const clearSelection = useGridStore(
-    (state: GridState) => state.clearSelection,
-  );
-  const serializeForMongo = useGridStore(
-    (state: GridState) => state.serializeForMongo,
-  );
   const setInteractionMode = useGridStore(
     (state: GridState) => state.setInteractionMode,
   );
@@ -78,6 +74,8 @@ export function MapEditorWithToolbar({
     imageUrl,
     grid,
     activeCellId,
+    selectedCellIds,
+    showGrid,
     onCellClick,
     onCellSelected,
     onCellsSelected,
@@ -221,11 +219,6 @@ export function MapEditorWithToolbar({
     tool,
   ]);
 
-  const handleSerialize = useCallback(() => {
-    const payload = serializeForMongo();
-    console.info('[grid] serialized payload', payload);
-  }, [serializeForMongo]);
-
   const activeCell = useMemo(() => {
     if (!activeCellId || !grid) {
       return null;
@@ -254,6 +247,7 @@ export function MapEditorWithToolbar({
           onBackgroundError={(error) =>
             console.error('Map image error:', error)
           }
+          cellVisuals={cellVisuals}
         />
       </div>
 
@@ -263,6 +257,10 @@ export function MapEditorWithToolbar({
         direction="right"
       >
         <DrawerContent className="w-full max-w-md border-l border-sidebar-border">
+          <DrawerTitle className="sr-only">Movement cell details</DrawerTitle>
+          <DrawerDescription className="sr-only">
+            Inspect and edit the selected movement cell.
+          </DrawerDescription>
           {activeCell &&
             renderCellDetails &&
             renderCellDetails(activeCell, handleClearSelection)}

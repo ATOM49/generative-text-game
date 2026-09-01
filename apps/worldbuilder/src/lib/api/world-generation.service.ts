@@ -1,23 +1,18 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import {
   WorldBlueprintSchema,
-  WorldCreationResultSchema,
+  WorldGenerationJobSchema,
   WorldCreationSeedSchema,
   type ParsedWorldCreationSeed,
   type WorldBlueprint,
-  type WorldCreationResult,
+  type WorldGenerationJob,
 } from '@talespin/schema';
-import { CharacterService } from './character.service';
 import { ApiError } from './errors';
-import { FactionService } from './faction.service';
 import {
   DEFAULT_GRID_HEIGHT,
   DEFAULT_GRID_WIDTH,
-  GridService,
   type GridCellTemplate,
 } from './grid.service';
-import { RegionService } from './region.service';
-import { WorldService } from './world.service';
 
 type GenerationOptions = {
   watcherBaseUrl?: string;
@@ -25,6 +20,10 @@ type GenerationOptions = {
 };
 
 const coordinateKey = (x: number, y: number) => `${x}:${y}`;
+const PENDING_HOME_CELL_ID = '__pending_home_cell__';
+const PERSISTENCE_LEASE_MS = 2 * 60 * 1000;
+
+type GenerationJobRecord = Prisma.WorldGenerationJobGetPayload<object>;
 
 export class WorldGenerationService {
   private readonly watcherBaseUrl: string;
@@ -52,12 +51,123 @@ export class WorldGenerationService {
         : 600000);
   }
 
-  async createWorld(seedInput: unknown): Promise<WorldCreationResult> {
+  async createJob(
+    seedInput: unknown,
+    userId: string,
+  ): Promise<WorldGenerationJob> {
     const seed = WorldCreationSeedSchema.parse(seedInput);
-    const blueprint = await this.requestBlueprint(seed);
-    this.validateBlueprint(seed, blueprint);
+    const job = await this.prisma.worldGenerationJob.create({
+      data: {
+        userId,
+        seed: seed as Prisma.InputJsonValue,
+      },
+    });
 
-    return this.persistBlueprint(seed, blueprint);
+    return this.mapJob(job);
+  }
+
+  async getJob(jobId: string, userId: string): Promise<WorldGenerationJob> {
+    const job = await this.prisma.worldGenerationJob.findFirst({
+      where: { id: jobId, userId },
+    });
+
+    if (!job) {
+      throw new ApiError(404, 'World generation job not found');
+    }
+
+    return this.mapJob(job);
+  }
+
+  async runJob(jobId: string, userId: string): Promise<WorldGenerationJob> {
+    const existing = await this.prisma.worldGenerationJob.findFirst({
+      where: { id: jobId, userId },
+    });
+
+    if (!existing) {
+      throw new ApiError(404, 'World generation job not found');
+    }
+    if (existing.status === 'COMPLETED') {
+      return this.mapJob(existing);
+    }
+
+    const now = new Date();
+    const leaseExpiresAt = new Date(
+      now.getTime() + this.generationTimeout + PERSISTENCE_LEASE_MS,
+    );
+    const claimed = await this.prisma.worldGenerationJob.updateMany({
+      where: {
+        id: jobId,
+        userId,
+        OR: [
+          { status: 'QUEUED' },
+          { status: 'FAILED' },
+          {
+            status: { in: ['GENERATING', 'PERSISTING'] },
+            leaseExpiresAt: null,
+          },
+          {
+            status: { in: ['GENERATING', 'PERSISTING'] },
+            leaseExpiresAt: { lte: now },
+          },
+        ],
+      },
+      data: {
+        status: 'GENERATING',
+        attempt: { increment: 1 },
+        error: null,
+        startedAt: now,
+        finishedAt: null,
+        leaseExpiresAt,
+      },
+    });
+
+    if (claimed.count !== 1) {
+      throw new ApiError(409, 'World generation is already running');
+    }
+
+    const job = await this.prisma.worldGenerationJob.findFirstOrThrow({
+      where: { id: jobId, userId },
+    });
+    const seed = WorldCreationSeedSchema.parse(job.seed);
+    const attempt = job.attempt;
+
+    try {
+      let blueprint: WorldBlueprint | undefined;
+      if (job.blueprint) {
+        const checkpoint = WorldBlueprintSchema.safeParse(job.blueprint);
+        if (checkpoint.success) {
+          blueprint = checkpoint.data;
+        } else {
+          await this.prisma.worldGenerationJob.updateMany({
+            where: { id: jobId, userId, attempt, status: 'GENERATING' },
+            data: { blueprint: null },
+          });
+        }
+      }
+
+      if (!blueprint) {
+        blueprint = await this.requestBlueprint(seed);
+      }
+      this.validateBlueprint(seed, blueprint);
+
+      const checkpointed = await this.prisma.worldGenerationJob.updateMany({
+        where: { id: jobId, userId, attempt, status: 'GENERATING' },
+        data: {
+          status: 'PERSISTING',
+          blueprint: blueprint as Prisma.InputJsonValue,
+          leaseExpiresAt: new Date(Date.now() + PERSISTENCE_LEASE_MS),
+        },
+      });
+      if (checkpointed.count !== 1) {
+        throw new ApiError(409, 'A newer world generation attempt took over');
+      }
+
+      await this.persistBlueprint(jobId, userId, attempt, seed, blueprint);
+    } catch (error) {
+      await this.failAttempt(jobId, userId, attempt, error);
+    }
+
+    return this.getJob(jobId, userId);
   }
 
   private async requestBlueprint(
@@ -279,164 +389,281 @@ export class WorldGenerationService {
   }
 
   private async persistBlueprint(
+    jobId: string,
+    userId: string,
+    attempt: number,
     seed: ParsedWorldCreationSeed,
     blueprint: WorldBlueprint,
-  ): Promise<WorldCreationResult> {
-    let worldId: string | undefined;
-
-    try {
-      const world = await this.prisma.world.create({
-        data: {
-          name: blueprint.context.name,
-          description: blueprint.context.description,
-          theme: blueprint.context.theme,
-          contextWindowLimit: 1024,
-          mapImageUrl: blueprint.mapImageUrl,
-          lore: blueprint.context.lore as Prisma.InputJsonValue,
-          settings: {
-            generationSeed: seed,
-          } as Prisma.InputJsonValue,
-        },
-        select: { id: true },
-      });
-      worldId = world.id;
-
-      const gridPayload = this.buildGridCells(blueprint);
-      const gridResult = await new GridService(this.prisma).createGrid(
-        worldId,
-        {
-          width: DEFAULT_GRID_WIDTH,
-          height: DEFAULT_GRID_HEIGHT,
-          cells: gridPayload,
-        },
-      );
-
-      const factionIds = new Map<string, string>();
-      for (const generated of blueprint.factions) {
-        const { faction } = generated;
-        const created = await this.prisma.faction.create({
-          data: {
-            worldId,
-            name: faction.name,
-            summary: faction.summary || null,
-            description: faction.description || null,
-            previewUrl: faction.previewUrl || null,
-            category: faction.category,
-            meta: faction.meta as Prisma.InputJsonValue,
+  ): Promise<string> {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const currentAttempt = await transaction.worldGenerationJob.findFirst({
+          where: {
+            id: jobId,
+            userId,
+            attempt,
+            status: 'PERSISTING',
           },
           select: { id: true },
         });
-        factionIds.set(generated.key, created.id);
-      }
-
-      const cellsByCoordinate = new Map(
-        gridResult.cells.map((cell) => [
-          coordinateKey(cell.x, cell.y),
-          cell._id,
-        ]),
-      );
-      const assignmentsByRegion = new Map(
-        blueprint.assignments.map((assignment) => [
-          assignment.regionKey,
-          assignment,
-        ]),
-      );
-
-      for (const region of blueprint.regions) {
-        const assignment = assignmentsByRegion.get(region.key);
-        if (!assignment) {
-          throw new Error(`Missing validated assignment for ${region.key}`);
+        if (!currentAttempt) {
+          throw new ApiError(409, 'A newer world generation attempt took over');
         }
 
-        const cellIds = region.cellCoordinates.map((coordinate) => {
-          const cellId = cellsByCoordinate.get(
-            coordinateKey(coordinate.x, coordinate.y),
-          );
-          if (!cellId) {
+        const world = await transaction.world.create({
+          data: {
+            name: blueprint.context.name,
+            description: blueprint.context.description,
+            theme: blueprint.context.theme,
+            contextWindowLimit: 1024,
+            mapImageUrl: blueprint.mapImageUrl,
+            lore: blueprint.context.lore as Prisma.InputJsonValue,
+            settings: {
+              generationSeed: seed,
+            } as Prisma.InputJsonValue,
+          },
+          select: { id: true },
+        });
+        const gridPayload = this.buildGridCells(blueprint);
+        const grid = await transaction.worldGrid.create({
+          data: {
+            worldId: world.id,
+            width: DEFAULT_GRID_WIDTH,
+            height: DEFAULT_GRID_HEIGHT,
+            homeCellId: PENDING_HOME_CELL_ID,
+          },
+          select: { id: true },
+        });
+        await transaction.gridCell.createMany({
+          data: gridPayload.map((cell) => ({
+            gridId: grid.id,
+            x: cell.x,
+            y: cell.y,
+            walkable: cell.walkable ?? true,
+            biome: cell.biome ?? null,
+            name: cell.name ?? null,
+            description: cell.description ?? null,
+            tags: cell.tags ?? [],
+          })),
+        });
+
+        const persistedCells = await transaction.gridCell.findMany({
+          where: { gridId: grid.id },
+          select: { id: true, x: true, y: true },
+        });
+        const homeCell = persistedCells.find(
+          (cell) =>
+            cell.x === Math.floor(DEFAULT_GRID_WIDTH / 2) &&
+            cell.y === Math.floor(DEFAULT_GRID_HEIGHT / 2),
+        );
+        if (!homeCell) {
+          throw new Error('Failed to locate home cell for generated world');
+        }
+        await transaction.worldGrid.update({
+          where: { id: grid.id },
+          data: { homeCellId: homeCell.id },
+        });
+
+        const factionIds = new Map<string, string>();
+        for (const generated of blueprint.factions) {
+          const { faction } = generated;
+          const created = await transaction.faction.create({
+            data: {
+              worldId: world.id,
+              name: faction.name,
+              summary: faction.summary || null,
+              description: faction.description || null,
+              previewUrl: faction.previewUrl || null,
+              category: faction.category,
+              meta: faction.meta as Prisma.InputJsonValue,
+            },
+            select: { id: true },
+          });
+          factionIds.set(generated.key, created.id);
+        }
+
+        const cellsByCoordinate = new Map(
+          persistedCells.map((cell) => [
+            coordinateKey(cell.x, cell.y),
+            cell.id,
+          ]),
+        );
+        const assignmentsByRegion = new Map(
+          blueprint.assignments.map((assignment) => [
+            assignment.regionKey,
+            assignment,
+          ]),
+        );
+
+        for (const region of blueprint.regions) {
+          const assignment = assignmentsByRegion.get(region.key);
+          if (!assignment) {
+            throw new Error(`Missing validated assignment for ${region.key}`);
+          }
+
+          const cellIds = region.cellCoordinates.map((coordinate) => {
+            const cellId = cellsByCoordinate.get(
+              coordinateKey(coordinate.x, coordinate.y),
+            );
+            if (!cellId) {
+              throw new Error(
+                `Missing persisted grid cell ${coordinateKey(coordinate.x, coordinate.y)}`,
+              );
+            }
+            return cellId;
+          });
+
+          const factionPresence = assignment.factions.map((presence) => {
+            const factionId = factionIds.get(presence.factionKey);
+            if (!factionId) {
+              throw new Error(
+                `Missing persisted faction ${presence.factionKey}`,
+              );
+            }
+            return {
+              factionId,
+              influence: presence.influence,
+              rationale: presence.rationale,
+            };
+          });
+
+          await transaction.region.create({
+            data: {
+              worldId: world.id,
+              gridId: grid.id,
+              cellIds,
+              name: region.name,
+              summary: region.summary,
+              description: region.description,
+              biome: region.biome,
+              atmosphere: region.atmosphere,
+              mapBounds: region.mapBounds as Prisma.InputJsonValue,
+              missionHooks: region.missionHooks,
+              factionPresence: factionPresence as Prisma.InputJsonValue,
+            },
+          });
+        }
+
+        for (const generated of blueprint.characters) {
+          const factionId = factionIds.get(generated.factionKey);
+          if (!factionId) {
             throw new Error(
-              `Missing persisted grid cell ${coordinateKey(coordinate.x, coordinate.y)}`,
+              `Missing persisted faction ${generated.factionKey}`,
             );
           }
-          return cellId;
-        });
 
-        const factionPresence = assignment.factions.map((presence) => {
-          const factionId = factionIds.get(presence.factionKey);
-          if (!factionId) {
-            throw new Error(`Missing persisted faction ${presence.factionKey}`);
-          }
-          return {
-            factionId,
-            influence: presence.influence,
-            rationale: presence.rationale,
-          };
-        });
-
-        await this.prisma.region.create({
-          data: {
-            worldId,
-            gridId: gridResult.grid._id,
-            cellIds,
-            name: region.name,
-            summary: region.summary,
-            description: region.description,
-            biome: region.biome,
-            atmosphere: region.atmosphere,
-            mapBounds: region.mapBounds as Prisma.InputJsonValue,
-            missionHooks: region.missionHooks,
-            factionPresence: factionPresence as Prisma.InputJsonValue,
-          },
-        });
-      }
-
-      for (const generated of blueprint.characters) {
-        const factionId = factionIds.get(generated.factionKey);
-        if (!factionId) {
-          throw new Error(`Missing persisted faction ${generated.factionKey}`);
+          await transaction.character.create({
+            data: {
+              worldId: world.id,
+              name: generated.name,
+              description: generated.description,
+              biography: generated.biography,
+              previewUrl: generated.previewUrl || null,
+              gallery: null,
+              promptHint: generated.promptHint,
+              traits: generated.traits,
+              factionIds: [factionId],
+              cultureIds: [],
+              speciesIds: [],
+              archetypeIds: [],
+              meta: generated.meta as Prisma.InputJsonValue,
+            },
+          });
         }
 
-        await this.prisma.character.create({
+        const completed = await transaction.worldGenerationJob.updateMany({
+          where: {
+            id: jobId,
+            userId,
+            attempt,
+            status: 'PERSISTING',
+          },
           data: {
-            worldId,
-            name: generated.name,
-            description: generated.description,
-            biography: generated.biography,
-            previewUrl: generated.previewUrl || null,
-            gallery: null,
-            promptHint: generated.promptHint,
-            traits: generated.traits,
-            factionIds: [factionId],
-            cultureIds: [],
-            speciesIds: [],
-            archetypeIds: [],
-            meta: generated.meta as Prisma.InputJsonValue,
+            status: 'COMPLETED',
+            resultWorldId: world.id,
+            error: null,
+            leaseExpiresAt: null,
+            finishedAt: new Date(),
           },
         });
-      }
+        if (completed.count !== 1) {
+          throw new ApiError(409, 'A newer world generation attempt took over');
+        }
 
-      const result = {
-        world: await new WorldService(this.prisma).getWorld(worldId),
-        regions: await new RegionService(this.prisma).listRegions(worldId),
-        factions: await new FactionService(this.prisma).listFactions(worldId),
-        characters: await new CharacterService(this.prisma).listCharacters(
-          worldId,
-        ),
+        return world.id;
+      },
+      {
+        maxWait: 10_000,
+        timeout: PERSISTENCE_LEASE_MS,
+      },
+    );
+  }
+
+  private async failAttempt(
+    jobId: string,
+    userId: string,
+    attempt: number,
+    error: unknown,
+  ) {
+    const message =
+      error instanceof ApiError
+        ? error.message
+        : 'World creation stopped before it could finish.';
+    await this.prisma.worldGenerationJob.updateMany({
+      where: {
+        id: jobId,
+        userId,
+        attempt,
+        status: { in: ['GENERATING', 'PERSISTING'] },
+      },
+      data: {
+        status: 'FAILED',
+        error: message,
+        leaseExpiresAt: null,
+        finishedAt: new Date(),
+      },
+    });
+  }
+
+  private async mapJob(job: GenerationJobRecord): Promise<WorldGenerationJob> {
+    const seed = WorldCreationSeedSchema.parse(job.seed);
+    const leaseExpired =
+      (job.status === 'GENERATING' || job.status === 'PERSISTING') &&
+      (!job.leaseExpiresAt || job.leaseExpiresAt.getTime() <= Date.now());
+    const retryable =
+      job.status === 'QUEUED' || job.status === 'FAILED' || leaseExpired;
+
+    let result: WorldGenerationJob['result'];
+    if (job.status === 'COMPLETED' && job.resultWorldId) {
+      const [regions, factions, characters] = await Promise.all([
+        this.prisma.region.count({ where: { worldId: job.resultWorldId } }),
+        this.prisma.faction.count({ where: { worldId: job.resultWorldId } }),
+        this.prisma.character.count({ where: { worldId: job.resultWorldId } }),
+      ]);
+      result = {
+        worldId: job.resultWorldId,
+        regions,
+        factions,
+        characters,
       };
-
-      return WorldCreationResultSchema.parse(result);
-    } catch (error) {
-      if (worldId) {
-        try {
-          await new WorldService(this.prisma).deleteWorld(worldId);
-        } catch (cleanupError) {
-          console.error(
-            `Failed to compensate world generation for ${worldId}:`,
-            cleanupError,
-          );
-        }
-      }
-      throw error;
     }
+
+    return WorldGenerationJobSchema.parse({
+      jobId: job.id,
+      status: job.status,
+      seed,
+      attempt: job.attempt,
+      retryable,
+      blueprintAvailable: Boolean(job.blueprint),
+      error:
+        job.error ??
+        (leaseExpired
+          ? 'The previous generation attempt stopped responding. You can retry safely.'
+          : undefined),
+      result,
+      createdAt: job.createdAt.toISOString(),
+      updatedAt: job.updatedAt.toISOString(),
+    });
   }
 
   private buildGridCells(blueprint: WorldBlueprint): GridCellTemplate[] {
