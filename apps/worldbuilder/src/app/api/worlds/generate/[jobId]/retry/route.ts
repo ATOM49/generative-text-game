@@ -13,8 +13,8 @@ export async function POST(
   try {
     const user = await requireUser(BUILDER_ONLY);
     const { jobId } = await context.params;
-    const job = await worldGenerationService.runJob(jobId, user.id);
-    return NextResponse.json(job);
+    const job = await worldGenerationService.retryJob(jobId, user.id);
+    return NextResponse.json(job, { status: 202 });
   } catch (error) {
     return handleApiError(error);
   }

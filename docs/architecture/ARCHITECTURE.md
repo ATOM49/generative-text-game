@@ -26,6 +26,13 @@ packages/schema is shared across both applications.
 
 The streamlined world-creation workflow is a concrete orchestration inside watcher: it enriches one seed, generates a map and factions in parallel, analyzes deterministic map cut-outs into regions, generates faction-grounded characters, then joins regions and factions through validated assignments. Watcher returns a typed proposal; worldbuilder validates references and persists the authoritative package.
 
+World creation is dispatched through a MongoDB-backed `WorldGenerationJob`
+queue owned by worldbuilder. Web routes authorize and enqueue jobs, while a
+separate worker claims queued or lease-expired attempts, calls watcher, stores a
+validated blueprint checkpoint, and atomically commits the authoritative world
+package. Failed attempts require an explicit builder retry; interrupted leased
+attempts are automatically eligible for another worker.
+
 ## Local Runtime
 
 The supported local stack uses Node 20.19.0, pnpm 10.13.1, Docker Compose, a single-node MongoDB replica set, and MinIO. Shared workspace packages publish local `dist` exports consumed by both apps, so they must be built after a fresh install. Environment templates live beside each app; the authoritative commands and provider choices are documented in [`../LOCAL_DEVELOPMENT.md`](../LOCAL_DEVELOPMENT.md).

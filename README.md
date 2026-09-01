@@ -50,13 +50,14 @@ pnpm --filter @talespin/worldbuilder exec prisma generate
 pnpm --filter @talespin/worldbuilder exec prisma db push
 ```
 
-Run both applications:
+Run both applications and the generation worker:
 
 ```bash
 pnpm dev
 ```
 
 - Worldbuilder: <http://localhost:3000>
+- World-generation worker: polls MongoDB for queued or interrupted jobs
 - Watcher: <http://localhost:4000> (returns `{"root":true}`)
 - MinIO console: <http://localhost:9001> (`minioadmin` / `minioadmin` locally)
 
@@ -67,9 +68,10 @@ Read [Local Development](docs/LOCAL_DEVELOPMENT.md) for environment choices, rea
 ## Common Commands
 
 ```bash
-pnpm dev                                  # worldbuilder :3000 + watcher :4000
+pnpm dev                                  # worldbuilder + generation worker + watcher
 pnpm build                                # all packages and applications
 pnpm lint                                 # workspace ESLint
+pnpm test:world                           # world-generation job tests
 pnpm --filter @talespin/watcher test      # watcher tests
 pnpm --filter @talespin/ai test           # provider package tests
 pnpm test:e2e:local                       # paid-provider browser flow

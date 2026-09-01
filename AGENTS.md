@@ -55,7 +55,7 @@ Use Node 20.19.0 (`.nvmrc`) and pnpm 10.13.1.
 - `docker compose up -d`: start MongoDB and MinIO. Initialize `rs0` once for each fresh Mongo volume as documented in `docs/LOCAL_DEVELOPMENT.md`.
 - Run `pnpm build:schema`, `pnpm build:ai`, and `pnpm build:cdn` after a fresh install because consumers import built `dist` exports.
 - Generate Prisma Client and apply schema/index changes with `pnpm --filter @talespin/worldbuilder exec prisma generate` and `pnpm --filter @talespin/worldbuilder exec prisma db push`.
-- `pnpm dev`: run worldbuilder on port 3000 and watcher on port 4000.
+- `pnpm dev`: run worldbuilder on port 3000, the world-generation worker, and watcher on port 4000.
 - `pnpm build`: build shared packages and both apps.
 - `pnpm lint`: run workspace ESLint and Prettier checks.
 - `pnpm format`: format supported files.

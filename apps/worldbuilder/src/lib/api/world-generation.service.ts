@@ -25,6 +25,23 @@ const PERSISTENCE_LEASE_MS = 2 * 60 * 1000;
 
 type GenerationJobRecord = Prisma.WorldGenerationJobGetPayload<object>;
 
+const interruptedAttemptWhere = (
+  now: Date,
+): Prisma.WorldGenerationJobWhereInput => ({
+  status: { in: ['GENERATING', 'PERSISTING'] },
+  OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: now } }],
+});
+
+const dispatchableJobWhere = (
+  now: Date,
+): Prisma.WorldGenerationJobWhereInput => ({
+  OR: [{ status: 'QUEUED' }, interruptedAttemptWhere(now)],
+});
+
+const retryableJobWhere = (now: Date): Prisma.WorldGenerationJobWhereInput => ({
+  OR: [{ status: 'FAILED' }, interruptedAttemptWhere(now)],
+});
+
 export class WorldGenerationService {
   private readonly watcherBaseUrl: string;
   private readonly generationTimeout: number;
@@ -78,6 +95,59 @@ export class WorldGenerationService {
     return this.mapJob(job);
   }
 
+  async retryJob(jobId: string, userId: string): Promise<WorldGenerationJob> {
+    const existing = await this.prisma.worldGenerationJob.findFirst({
+      where: { id: jobId, userId },
+    });
+
+    if (!existing) {
+      throw new ApiError(404, 'World generation job not found');
+    }
+    if (existing.status === 'COMPLETED' || existing.status === 'QUEUED') {
+      return this.mapJob(existing);
+    }
+
+    const requeued = await this.prisma.worldGenerationJob.updateMany({
+      where: {
+        id: jobId,
+        userId,
+        ...retryableJobWhere(new Date()),
+      },
+      data: {
+        status: 'QUEUED',
+        error: null,
+        leaseExpiresAt: null,
+        startedAt: null,
+        finishedAt: null,
+      },
+    });
+
+    if (requeued.count !== 1) {
+      throw new ApiError(409, 'World generation is already running');
+    }
+
+    return this.getJob(jobId, userId);
+  }
+
+  async runNextJob(): Promise<string | null> {
+    const candidate = await this.prisma.worldGenerationJob.findFirst({
+      where: dispatchableJobWhere(new Date()),
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, userId: true },
+    });
+
+    if (!candidate) return null;
+
+    try {
+      await this.runJob(candidate.id, candidate.userId);
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 409) return null;
+      throw error;
+    }
+
+    return candidate.id;
+  }
+
   async runJob(jobId: string, userId: string): Promise<WorldGenerationJob> {
     const existing = await this.prisma.worldGenerationJob.findFirst({
       where: { id: jobId, userId },
@@ -98,18 +168,7 @@ export class WorldGenerationService {
       where: {
         id: jobId,
         userId,
-        OR: [
-          { status: 'QUEUED' },
-          { status: 'FAILED' },
-          {
-            status: { in: ['GENERATING', 'PERSISTING'] },
-            leaseExpiresAt: null,
-          },
-          {
-            status: { in: ['GENERATING', 'PERSISTING'] },
-            leaseExpiresAt: { lte: now },
-          },
-        ],
+        ...dispatchableJobWhere(now),
       },
       data: {
         status: 'GENERATING',
@@ -630,8 +689,7 @@ export class WorldGenerationService {
     const leaseExpired =
       (job.status === 'GENERATING' || job.status === 'PERSISTING') &&
       (!job.leaseExpiresAt || job.leaseExpiresAt.getTime() <= Date.now());
-    const retryable =
-      job.status === 'QUEUED' || job.status === 'FAILED' || leaseExpired;
+    const retryable = job.status === 'FAILED' || leaseExpired;
 
     let result: WorldGenerationJob['result'];
     if (job.status === 'COMPLETED' && job.resultWorldId) {

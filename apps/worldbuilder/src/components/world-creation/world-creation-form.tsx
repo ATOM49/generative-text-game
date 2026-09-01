@@ -103,8 +103,6 @@ const stateForJob = (job: WorldGenerationJob): GenerationState => {
 export function WorldCreationForm() {
   const router = useRouter();
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const runnerInFlightRef = useRef(false);
-  const autoStartedAttemptsRef = useRef(new Set<string>());
   const latestJobRef = useRef<WorldGenerationJob | null>(null);
   const [name, setName] = useState('');
   const [theme, setTheme] = useState('');
@@ -116,15 +114,11 @@ export function WorldCreationForm() {
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<CreationSummary | null>(null);
   const [isCreatingJob, setIsCreatingJob] = useState(false);
-  const [isStartingRunner, setIsStartingRunner] = useState(false);
+  const [isRetryingJob, setIsRetryingJob] = useState(false);
   const [isRecoveringJob, setIsRecoveringJob] = useState(true);
 
   const isLocked = Boolean(jobId) || isCreatingJob;
-  const isServerWorking =
-    isStartingRunner ||
-    (job != null &&
-      !job.retryable &&
-      (job.status === 'GENERATING' || job.status === 'PERSISTING'));
+  const isDispatching = isCreatingJob || isRetryingJob;
   const canSubmit =
     !isRecoveringJob && theme.length > 0 && description.trim().length > 0;
 
@@ -203,16 +197,15 @@ export function WorldCreationForm() {
     [applyJob],
   );
 
-  const runJob = useCallback(
+  const retryJob = useCallback(
     async (nextJobId: string) => {
-      if (runnerInFlightRef.current) return;
-      runnerInFlightRef.current = true;
-      setIsStartingRunner(true);
+      if (isRetryingJob) return;
+      setIsRetryingJob(true);
       setError(null);
 
       try {
         const response = await fetch(
-          `/api/worlds/generate/${encodeURIComponent(nextJobId)}/run`,
+          `/api/worlds/generate/${encodeURIComponent(nextJobId)}/retry`,
           { method: 'POST', credentials: 'same-origin' },
         );
         if (response.status === 409) {
@@ -235,11 +228,10 @@ export function WorldCreationForm() {
           setError(runnerError);
         }
       } finally {
-        runnerInFlightRef.current = false;
-        setIsStartingRunner(false);
+        setIsRetryingJob(false);
       }
     },
-    [applyJob, loadJob],
+    [applyJob, isRetryingJob, loadJob],
   );
 
   useEffect(() => {
@@ -303,14 +295,6 @@ export function WorldCreationForm() {
     };
   }, [job, jobId, loadJob]);
 
-  useEffect(() => {
-    if (job?.status !== 'QUEUED') return;
-    const attemptKey = `${job.jobId}:${job.attempt}`;
-    if (autoStartedAttemptsRef.current.has(attemptKey)) return;
-    autoStartedAttemptsRef.current.add(attemptKey);
-    void runJob(job.jobId);
-  }, [job, runJob]);
-
   useEffect(
     () => () => {
       if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
@@ -367,14 +351,13 @@ export function WorldCreationForm() {
   };
 
   const handleRetry = () => {
-    if (!job || !job.retryable || isStartingRunner) return;
-    autoStartedAttemptsRef.current.add(`${job.jobId}:${job.attempt}`);
-    setGenerationState(job.blueprintAvailable ? 'persisting' : 'queued');
-    void runJob(job.jobId);
+    if (!job || !job.retryable || isRetryingJob) return;
+    setGenerationState('queued');
+    void retryJob(job.jobId);
   };
 
   const handleStartOver = () => {
-    if (isServerWorking) return;
+    if (isDispatching) return;
     window.localStorage.removeItem(ACTIVE_JOB_KEY);
     setJobId(null);
     setJob(null);
@@ -478,9 +461,11 @@ export function WorldCreationForm() {
                       : 'Creation in progress'}
                 </AlertTitle>
                 <AlertDescription>
-                  Attempt {job.attempt || 1}. This page is polling the saved
-                  job; you can return with this URL if the request is
-                  interrupted.
+                  {job.attempt === 0
+                    ? 'Waiting for the first worker attempt.'
+                    : `Attempt ${job.attempt}.`}{' '}
+                  This page is polling the saved job; you can return with this
+                  URL if the browser is closed.
                 </AlertDescription>
               </Alert>
             )}
@@ -516,20 +501,23 @@ export function WorldCreationForm() {
                   type="button"
                   variant="ghost"
                   onClick={() => router.push('/')}
-                  disabled={isServerWorking}
+                  disabled={isDispatching}
                 >
                   <ArrowLeft />
                   Back to worlds
                 </Button>
-                {jobId && job?.status !== 'COMPLETED' && !isServerWorking && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleStartOver}
-                  >
-                    Start over
-                  </Button>
-                )}
+                {jobId &&
+                  job?.status !== 'COMPLETED' &&
+                  (!job || job.retryable) &&
+                  !isDispatching && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleStartOver}
+                    >
+                      Start over
+                    </Button>
+                  )}
               </div>
               {summary ? (
                 <Button
@@ -544,23 +532,23 @@ export function WorldCreationForm() {
                   type="button"
                   size="lg"
                   onClick={handleRetry}
-                  disabled={isStartingRunner}
+                  disabled={isRetryingJob}
                 >
                   <RefreshCcw />
-                  {isStartingRunner
-                    ? 'Starting saved job…'
+                  {isRetryingJob
+                    ? 'Requeuing saved job…'
                     : job.blueprintAvailable
                       ? 'Resume saved blueprint'
-                      : job.attempt === 0
-                        ? 'Start saved job'
-                        : 'Retry creation'}
+                      : 'Retry creation'}
                 </Button>
               ) : job ? (
                 <Button type="button" size="lg" disabled>
                   <Sparkles />
-                  {job.status === 'PERSISTING'
-                    ? 'Saving your world…'
-                    : 'Creating your world…'}
+                  {job.status === 'QUEUED'
+                    ? 'Queued for background worker…'
+                    : job.status === 'PERSISTING'
+                      ? 'Saving your world…'
+                      : 'Creating your world…'}
                 </Button>
               ) : jobId ? (
                 <Button

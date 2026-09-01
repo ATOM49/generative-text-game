@@ -129,7 +129,13 @@ pnpm dev
 This starts:
 
 - `@talespin/worldbuilder` at <http://localhost:3000>
+- the durable world-generation worker, which polls MongoDB for queued jobs
 - `@talespin/watcher` at <http://localhost:4000>
+
+The worker is a separate long-running process. Production deployments must run
+`pnpm start:world-worker` (or the equivalent process command) alongside the web
+application; web requests only enqueue or retry jobs and never execute provider
+generation inline.
 
 Verify watcher independently:
 
@@ -142,6 +148,7 @@ The response should be `{"root":true}`. Sign in to worldbuilder, select the `BUI
 ## 6. Verification
 
 ```bash
+pnpm test:world
 pnpm --filter @talespin/watcher test
 pnpm --filter @talespin/ai test
 pnpm build

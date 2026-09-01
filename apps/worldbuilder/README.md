@@ -22,10 +22,13 @@ From the repository root:
 pnpm build:schema
 pnpm --filter @talespin/worldbuilder exec prisma generate
 pnpm --filter @talespin/worldbuilder exec prisma db push
-pnpm dev:world
+pnpm dev
 ```
 
-Worldbuilder runs at <http://localhost:3000> and expects watcher at `WATCHER_API_URL`, normally <http://localhost:4000>.
+Worldbuilder runs at <http://localhost:3000>, expects watcher at
+`WATCHER_API_URL`, normally <http://localhost:4000>, and requires the separate
+world-generation worker started by `pnpm dev`. Production process managers must
+run `pnpm start:world-worker` alongside the web application.
 
 ## Authentication and Roles
 
@@ -55,6 +58,7 @@ MongoDB must have the `rs0` replica set initialized as described in the local-de
 ## Verification
 
 ```bash
+pnpm test:world
 pnpm build:world
 pnpm lint
 ```
