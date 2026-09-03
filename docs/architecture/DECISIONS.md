@@ -61,3 +61,42 @@ A Region owns explicit references to one or more persisted grid cells and normal
 **Status:** Accepted (current)
 
 Map, faction, and character generation share a descriptive high-fidelity pixel-art contract owned by watcher prompts. Asset-specific composition may differ, but standalone and world-blueprint paths must reuse the same rendering and text-free constraints. Character variation is deterministic per identity/context and preserves one story-derived signature prop across gallery angles. Provider adapters remain visual-style agnostic, and prompt/provider/model/size changes produce distinct CDN cache identities.
+
+## ADR-011: Explorer remains in the existing web application
+
+**Status:** Accepted (target)
+
+Builder and explorer are separate route and presentation surfaces inside
+`apps/worldbuilder`, sharing one top-level Next.js root layout, authentication,
+World data, Prisma services, MongoDB, and generated media. Route groups and
+nested layouts may organize each surface. Create a separate explorer
+application only when independent deployment, scaling, ownership,
+authentication, or a stable remote game-server boundary justifies it.
+
+## ADR-012: Character selection is Story participation
+
+**Status:** Accepted (target)
+
+Selecting an existing or player-created Character for play must create a typed
+association between the Story, authenticated User, and Character. Do not
+overload Character authorship or `Character.userId` to represent active
+selection. New explorer persistence uses User as player identity unless the
+legacy standalone Player model is deliberately reconciled with User.
+
+## ADR-013: Generated narrative characters are Story-scoped
+
+**Status:** Accepted (target)
+
+Characters generated during Interactions receive stable identities and belong
+to the player's Story by default. They do not silently mutate shared World
+canon. Promotion into the reusable World is an explicit builder operation.
+
+## ADR-014: Agent harnesses do not own the gameplay loop
+
+**Status:** Accepted (target)
+
+The authoritative Mission loop remains typed, persisted, and deterministic.
+Use LangChain for focused generation and consider LangGraph when executable
+orchestration requires durable branching or interrupt/resume. Deep Agents may
+support bounded planning or play-testing workflows, but its plans, memory, and
+subagents are never authoritative Story, Mission, or Interaction state.

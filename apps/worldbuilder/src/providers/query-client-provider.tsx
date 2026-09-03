@@ -12,13 +12,18 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = React.useState(() => new QueryClient());
   const COPILOT_CLOUD_PUBLIC_API_KEY =
     process.env.NEXT_PUBLIC_COPILOT_CLOUD_PUBLIC_API_KEY;
+  const content = COPILOT_CLOUD_PUBLIC_API_KEY ? (
+    <CopilotKit publicApiKey={COPILOT_CLOUD_PUBLIC_API_KEY}>
+      {children}
+    </CopilotKit>
+  ) : (
+    children
+  );
 
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <CopilotKit publicApiKey={COPILOT_CLOUD_PUBLIC_API_KEY}>
-          {children}
-        </CopilotKit>
+        {content}
         <ReactQueryDevtools initialIsOpen={false} position="bottom-right" />
       </QueryClientProvider>
     </SessionProvider>

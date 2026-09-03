@@ -18,6 +18,8 @@ Read these before changing product or architecture boundaries:
 - `docs/product/DOMAIN_MODEL.md`
 - `docs/product/GAMEPLAY_LOOP.md`
 - `docs/architecture/ARCHITECTURE.md`
+- `docs/architecture/EXPLORER.md` before changing explorer routes, player
+  identity, Story/Mission/Interaction behavior, or gameplay orchestration
 - `docs/architecture/GENERATED_ART.md` before changing image generation or prompts
 - `docs/architecture/LANGGRAPH.md`
 - `docs/architecture/DECISIONS.md`

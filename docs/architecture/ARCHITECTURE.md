@@ -43,6 +43,16 @@ Watcher owns Talespin's shared high-fidelity pixel-art contract and asset-specif
 
 Prompt text, character staging, and Talespin visual rules must not move into provider adapters. Cache identity includes provider, model, purpose, complete prompt, and requested size. See [`GENERATED_ART.md`](GENERATED_ART.md).
 
+## Explorer Runtime
+
+The accepted explorer architecture keeps builder and explorer experiences in
+the existing Next.js application with one root layout and distinct nested route
+surfaces. Explorer play uses the established Story -> Chapter -> Mission ->
+Interaction hierarchy, a future deterministic game-engine boundary, Story-scoped
+player participation, and typed proposals from watcher. Deep Agents is not part
+of the authoritative Mission loop. See [`EXPLORER.md`](EXPLORER.md) for the
+route, ownership, state, runtime, and implementation decisions.
+
 ## Mapping from the Proposed Architecture
 
 | Proposed responsibility | Current location                       | Status                                                  |
