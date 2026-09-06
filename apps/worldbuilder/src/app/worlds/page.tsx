@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { WorldDirectory } from '@/components/world-directory';
 
-export default function WorldsRedirectPage() {
-  redirect('/');
+export default function BuilderWorldsPage() {
+  return <WorldDirectory mode="build" />;
 }

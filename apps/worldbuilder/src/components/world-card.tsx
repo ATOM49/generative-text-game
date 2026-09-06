@@ -13,12 +13,14 @@ import { Character, World } from '@talespin/schema';
 import Image from 'next/image';
 import Link from 'next/link';
 
+export type WorldDirectoryMode = 'build' | 'explore';
+
 interface WorldCardProps {
   world: World;
-  canCreateWorld: boolean;
+  mode: WorldDirectoryMode;
 }
 
-export function WorldCard({ world, canCreateWorld }: WorldCardProps) {
+export function WorldCard({ world, mode }: WorldCardProps) {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [isLoadingCharacters, setIsLoadingCharacters] = useState(false);
 
@@ -82,9 +84,10 @@ export function WorldCard({ world, canCreateWorld }: WorldCardProps) {
   };
 
   // Explorers go to the character route; builders go to the main world page
-  const href = canCreateWorld
-    ? `/worlds/${world._id}`
-    : `/worlds/${world._id}/character`;
+  const href =
+    mode === 'build'
+      ? `/worlds/${world._id}`
+      : `/explore/worlds/${world._id}/join`;
 
   const previewCharacters = characters.slice(0, 4);
   const extraCount = characters.length - previewCharacters.length;

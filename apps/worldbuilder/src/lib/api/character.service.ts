@@ -10,7 +10,9 @@ import {
   CharacterGeneratedDetailsSchema,
   CharacterMetaSchema,
   CharacterProfileRequestSchema,
+  PlayerCharacterCreationSchema,
   type CharacterImageRequestInput,
+  type PlayerCharacterCreationInput,
 } from '@talespin/schema';
 import { ApiError } from './errors';
 import { CharacterQueryParams, CharacterQueryParamsSchema } from './types';
@@ -131,6 +133,56 @@ export class CharacterService {
     return characters.map((character) => this.mapCharacterToDto(character));
   }
 
+  async listPlayableCharacters(
+    worldId: string,
+    userId: string,
+  ): Promise<Character[]> {
+    const characters = await this.prisma.character.findMany({
+      where: {
+        worldId,
+        OR: [{ userId: null }, { userId: { isSet: false } }, { userId }],
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: characterSelect.select,
+    });
+
+    return characters.map((character) => this.mapCharacterToDto(character));
+  }
+
+  async createPlayerCharacter(
+    worldId: string,
+    userId: string,
+    data: PlayerCharacterCreationInput,
+  ): Promise<Character> {
+    const validated = PlayerCharacterCreationSchema.parse(data);
+    const world = await this.prisma.world.findUnique({
+      where: { id: worldId },
+      select: { id: true },
+    });
+
+    if (!world) {
+      throw new ApiError(404, 'World not found');
+    }
+
+    const character = await this.prisma.character.create({
+      data: {
+        worldId,
+        userId,
+        name: validated.name,
+        description: validated.description || null,
+        traits: [],
+        factionIds: [],
+        cultureIds: [],
+        speciesIds: [],
+        archetypeIds: [],
+        meta: { descriptors: [] },
+      },
+      select: characterSelect.select,
+    });
+
+    return this.mapCharacterToDto(character);
+  }
+
   async getCharacter(worldId: string, id: string): Promise<Character> {
     const character = await this.prisma.character.findUnique({
       where: { id },
@@ -147,7 +199,6 @@ export class CharacterService {
   async createCharacter(
     worldId: string,
     data: CharacterCreationInput,
-    userId: string,
   ): Promise<Character> {
     const minimal = CharacterCreationSchema.parse(data);
 
@@ -201,7 +252,7 @@ export class CharacterService {
     const character = await this.prisma.character.create({
       data: {
         worldId,
-        userId,
+        userId: null,
         name: validated.name,
         description: validated.description || null,
         biography: validated.biography || null,

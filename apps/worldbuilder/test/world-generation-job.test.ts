@@ -73,8 +73,8 @@ test('retry requeues an interrupted attempt without discarding its blueprint', a
   assert.equal(job.blueprintAvailable, true);
   assert.equal(executedInline, false);
   assert.equal(updates.length, 1);
-  assert.equal(updates[0]?.where.id, record.id);
-  assert.equal(updates[0]?.where.userId, record.userId);
+  assert.equal(updates[0]?.where?.id, record.id);
+  assert.equal(updates[0]?.where?.userId, record.userId);
   assert.equal(updates[0]?.data.status, 'QUEUED');
   assert.equal('blueprint' in (updates[0]?.data ?? {}), false);
 });

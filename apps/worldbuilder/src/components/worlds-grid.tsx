@@ -2,17 +2,17 @@
 
 import React from 'react';
 import { World } from '@talespin/schema';
-import { WorldCard } from './world-card';
+import { WorldCard, type WorldDirectoryMode } from './world-card';
 
 interface WorldsGridProps {
   worlds: World[];
-  canCreateWorld: boolean;
+  mode: WorldDirectoryMode;
   isLoading?: boolean;
 }
 
 export function WorldsGrid({
   worlds,
-  canCreateWorld,
+  mode,
   isLoading = false,
 }: WorldsGridProps) {
   if (isLoading) {
@@ -30,7 +30,7 @@ export function WorldsGrid({
           No worlds found
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {canCreateWorld
+          {mode === 'build'
             ? 'Create your first world to get started'
             : 'Check back later for new worlds to explore'}
         </p>
@@ -41,11 +41,7 @@ export function WorldsGrid({
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
       {worlds.map((world) => (
-        <WorldCard
-          key={world._id}
-          world={world}
-          canCreateWorld={canCreateWorld}
-        />
+        <WorldCard key={world._id} world={world} mode={mode} />
       ))}
     </div>
   );

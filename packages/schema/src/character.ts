@@ -167,6 +167,15 @@ export const CharacterCreationSchema = z
   })
   .describe('Minimal payload collected from the builder prior to synthesis.');
 
+export const PlayerCharacterCreationSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    description: z.string().trim().max(500).optional(),
+  })
+  .describe(
+    'Player-authored character input that can start a Story without provider-backed generation.',
+  );
+
 export const CharacterGeneratedDetailsSchema = z
   .object({
     biography: z
@@ -221,6 +230,9 @@ export type CharacterProfileRequestInput = z.infer<
   typeof CharacterProfileRequestSchema
 >;
 export type CharacterCreationInput = z.infer<typeof CharacterCreationSchema>;
+export type PlayerCharacterCreationInput = z.infer<
+  typeof PlayerCharacterCreationSchema
+>;
 export type CharacterGeneratedDetails = z.infer<
   typeof CharacterGeneratedDetailsSchema
 >;

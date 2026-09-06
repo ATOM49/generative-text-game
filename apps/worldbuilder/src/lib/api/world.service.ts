@@ -228,10 +228,12 @@ export class WorldService {
       version: world.version,
       name: world.name,
       description: world.description || undefined,
-      theme: world.theme as World['theme'],
+      theme: world.theme ? (world.theme as World['theme']) : undefined,
       contextWindowLimit: world.contextWindowLimit ?? 1024,
       mapImageUrl: world.mapImageUrl || undefined,
-      settings: world.settings as World['settings'],
+      settings: world.settings
+        ? (world.settings as World['settings'])
+        : undefined,
       lore: world.lore ? WorldLoreSchema.parse(world.lore) : undefined,
       createdAt: world.createdAt.toISOString(),
       updatedAt: world.updatedAt.toISOString(),

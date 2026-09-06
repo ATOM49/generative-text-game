@@ -5,6 +5,7 @@ import character from './character.js';
 import faction from './faction.js';
 import factionDetails from './faction-details.js';
 import worldBlueprint from './world-blueprint.js';
+import narrative from './narrative.js';
 
 const generateRoutes: FastifyPluginAsync = async (fastify) => {
   // Register map generation route
@@ -19,6 +20,7 @@ const generateRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.register(factionDetails, { prefix: '/faction-details' });
   // Coherent one-shot world creation proposal
   fastify.register(worldBlueprint, { prefix: '/world-blueprint' });
+  fastify.register(narrative, { prefix: '/narrative' });
 };
 
 export default generateRoutes;

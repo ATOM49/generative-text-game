@@ -11,15 +11,19 @@ World
 ├── Location
 ├── Faction / Culture / Species / Archetype
 ├── Character
+├── Story -> StoryParticipant -> Character reference
+│   ├── Chapter -> Mission attempt -> Interaction / MissionAction
+│   ├── StoryCharacter
+│   └── NarrativeJob
 ├── Relationship
 ├── TreasureHuntConfig
 ├── TreasureHuntRun -> TreasureHuntEvent
 └── PlayerWorldExploration
 ```
 
-`World` is the current aggregate around a setting. Its optional generated lore keeps downstream content coherent. Regions are semantic map territories with explicit grid-cell references, crop bounds, mission hooks, and typed faction-presence metadata. Locations remain flat points with relative coordinates and optional grid-cell references; they are not hierarchical. Characters and factions have stable IDs and structured metadata. `Campaign` currently stores start/end entities, a goal, constraints, and status, but has no Story/Chapter/Mission lifecycle.
+`World` is the aggregate around a reusable setting. Its optional generated lore keeps downstream content coherent. Regions are semantic map territories with explicit grid-cell references, crop bounds, mission hooks, and typed faction-presence metadata. Locations remain flat points with relative coordinates and optional grid-cell references; they are not hierarchical. Characters and factions have stable IDs and structured metadata. `Story` persists explorer-specific narrative state, while `StoryParticipant` associates its authenticated User and selected Character without changing character ownership. Three ordered Chapters contain versioned Mission attempts and durable Interactions. `Campaign` remains a separate early route/goal contract.
 
-## Target Narrative Model
+## Narrative Model
 
 ```text
 Story
@@ -46,18 +50,24 @@ Interaction
 └── StateChanges
 ```
 
-The Story should own the plot; chapters and missions advance it. A Story should reference an existing World rather than duplicate the setting. Persistent entities should be referenced by stable IDs.
+The Story owns the plot; chapters and missions advance it. A Story references an existing World rather than duplicating the setting. Persistent entities use stable IDs.
 
 ## Mapping Rules
 
-| Target concept | Current analogue                  | Guidance                                                           |
-| -------------- | --------------------------------- | ------------------------------------------------------------------ |
-| Story          | None                              | Add a new aggregate; do not rename `World`.                        |
-| Chapter        | None                              | Add only with explicit progression state.                          |
-| Mission        | `Campaign`, `TreasureHuntRun`     | Reuse lessons, not identity; define objectives and terminal rules. |
-| Interaction    | `TreasureHuntEvent`               | Generalize through typed action/outcome contracts.                 |
-| World          | `World`, grid, regions, locations | Preserve as the reusable setting model.                            |
-| State change   | Event payloads and run fields     | Move toward explicit discriminated unions.                         |
+| Target concept | Current analogue                  | Guidance                                                               |
+| -------------- | --------------------------------- | ---------------------------------------------------------------------- |
+| Story          | `Story`, `StoryParticipant`       | Owns plot, setup status, durable state, and completion.                |
+| Chapter        | `Chapter`                         | Three ordered progression phases with Story checkpoints.               |
+| Mission        | `Mission`                         | Versioned attempts with route, objectives, budget, and terminal rules. |
+| Interaction    | `Interaction`, `MissionAction`    | Ordered situations plus idempotent player action records.              |
+| World          | `World`, grid, regions, locations | Preserve as the reusable setting model.                                |
+| State change   | `StoryStateChange`                | Validated proposals applied by deterministic engine rules.             |
+
+`GridCell.traversal` is nullable for compatibility and records a required
+medium, difficulty, foot suitability, and descriptive tags. Runtime
+normalization guarantees a profile even for old cells. `TravelPlan` is stored
+on the active Mission and contains its route, terrain legs, stops, chosen
+transport, cursor, and estimated cost.
 
 ## Modeling Rules
 

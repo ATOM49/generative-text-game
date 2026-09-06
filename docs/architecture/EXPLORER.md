@@ -2,11 +2,13 @@
 
 ## Status
 
-This document defines the accepted target architecture for Talespin's first
-mission-based explorer flow. The route surface, Story hierarchy, general
-Mission and Interaction contracts, and deterministic game engine described
-here are not implemented yet. Existing treasure-hunt models remain current
-precedents rather than aliases for these target concepts.
+This document defines the implemented architecture for Talespin's explorer
+flow. An explorer can choose a world-authored Character or create a
+player-owned Character, start or resume a persisted Story, follow its three
+Chapter timeline, and play the active terrain-aware Mission.
+`StoryParticipant` records the User, Story, and selected Character without
+changing Character ownership. Existing treasure-hunt models remain separate
+precedents rather than aliases for the narrative models.
 
 ## Application Decision
 
@@ -21,15 +23,17 @@ explorer presentation. Route groups may organize the source tree without
 changing public URLs. Do not create multiple root layouts merely to separate
 the experiences because crossing root layouts causes a full page navigation.
 
-The target route surface is:
+The route surface is:
 
 ```text
-/worlds
+/                                          choose build or explore
+/worlds                                    builder world management
 /worlds/[worldId]/...                              existing builder surface
 
-/explore/worlds/[worldId]/join                     choose a character
-/explore/stories/[storyId]                         story/chapter overview
-/explore/stories/[storyId]/missions/[missionId]    active mission
+/explore                                   explorer world selection
+/explore/worlds/[worldId]/join                     implemented: choose/create a character
+/explore/stories/[storyId]                         preparation and Chapter timeline
+/explore/stories/[storyId]/missions/[missionId]    active terrain-aware Mission
 ```
 
 An illustrative App Router organization is:
@@ -45,6 +49,10 @@ app/
 
 This is an organizational target, not a requirement to relocate existing
 builder routes before explorer work begins.
+
+The `/worlds` and `/explore` directories are deliberately distinct. The home
+gateway switches the authenticated user's active role before entering either
+surface; neither directory changes its behavior based on the other mode.
 
 Reconsider a separate application only when explorer requires independent
 deployment or scaling, a distinct authentication boundary, independent release
@@ -105,16 +113,17 @@ Dynamically proposed characters receive stable identities and are scoped to the
 Story by default. They must not silently become shared World canon. Promoting a
 Story character into the reusable World should be an explicit builder action.
 
-## First Mission Shape
+## Mission Shape
 
-The first Mission is a treasure hunt from one grid cell to another along a
-specific path. It should contain at least:
+Each Chapter has one replayable Mission from one grid cell to another. It
+contains:
 
 - a Chapter and Story reference;
-- an `IN_PROGRESS | SUCCESS | FAILED` lifecycle;
+- an `ACTIVE | SUCCESS | FAILED` lifecycle;
 - one or more structured objectives;
 - start and destination cell references;
-- an ordered, validated path of walkable grid-cell references;
+- an ordered, validated route across adjacent grid-cell references;
+- terrain legs, stops, chosen transport, and an estimated action cost;
 - the current path index or current cell reference;
 - an action or interaction budget where required;
 - terminal timestamps and failure details;
@@ -122,8 +131,10 @@ specific path. It should contain at least:
 
 The model may propose the mission premise, destination intent, encounter seeds,
 or constraints. Deterministic TypeScript behavior selects or validates the
-actual walkable path, enforces movement, advances the path cursor, applies the
-budget, and evaluates objective predicates.
+actual route, classifies terrain, segments travel legs, verifies transport,
+advances the path cursor, applies per-cell cost, and evaluates objective
+predicates. `walkable=false` is compatible legacy metadata; it requests
+transport rather than blocking the cell.
 
 Each configured point on the path creates an Interaction opportunity. The
 route may be planned up front, but the Interaction is generated when reached so
@@ -152,8 +163,7 @@ deterministic transitions                typed generation proposals
                     packages/schema
 ```
 
-`packages/game-engine` becomes justified when the first Mission transition is
-implemented. It owns pure, testable behavior for path validation, legal
+`packages/game-engine` owns pure, testable behavior for path validation, legal
 movement, budgets, objective evaluation, accepted state changes, and terminal
 status. It does not call models or persist data.
 
@@ -174,8 +184,10 @@ Each player action is a durable request boundary:
 
 1. Authorize the User against the Story and active Character.
 2. Load the current Story, Chapter, Mission, and pending Interaction.
-3. Normalize structured or free-form input into a typed player action.
-4. Reject stale, duplicate, out-of-turn, or mechanically illegal actions.
+3. Normalize structured or free-form input into a typed player action carrying
+   an action ID and expected Mission version.
+4. Reject stale, out-of-turn, or mechanically illegal actions and replay the
+   canonical result for duplicate action IDs.
 5. Ask watcher for a typed semantic proposal only when generation is required.
 6. Validate the proposal and let the game engine accept, reject, or constrain
    state changes.
@@ -206,21 +218,20 @@ builder-assisted Chapter planning or automated Mission play-testing. Those
 workflows must still return typed proposals through the same validation and
 game-engine boundary.
 
-## Implementation Sequence
+## Implemented Sequence
 
-1. Define the smallest real Story, Chapter, Story participant, Mission,
-   Interaction, action, outcome, and state-change contracts in
-   `packages/schema`.
-2. Add `packages/game-engine` with the first pure treasure-hunt transition and
-   focused tests.
-3. Add matching Prisma models and worldbuilder repositories/application
-   services, including authorization and idempotent action submission.
-4. Add explorer world selection, character selection or creation, and the
-   active Mission route inside the existing Next.js application.
-5. Add watcher generation contracts and chains for Mission briefs,
-   Interactions, and Story-scoped characters.
-6. Add LangGraph only when persisted application services no longer express the
-   required orchestration clearly.
+1. `packages/schema` defines Story, Chapter, Mission, Interaction, travel,
+   action, outcome, state-change, player-view, and generation contracts.
+2. `packages/game-engine` supplies pure terrain, route, transport, objective,
+   and state-transition rules with focused tests.
+3. Prisma and worldbuilder application services persist leased narrative jobs,
+   versioned attempts, idempotent actions, and transaction boundaries.
+4. Explorer provides world and character selection, Story preparation, a
+   Chapter timeline, and the active full-map Mission route.
+5. Watcher returns typed outline, Mission setup, Interaction, character, and
+   action-resolution proposals.
+6. LangGraph remains deferred while the persisted application state machine
+   expresses the durable control flow clearly.
 
 Every slice should keep Zod and Prisma representations aligned and test
 transitions independently from generated prose.

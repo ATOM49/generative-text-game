@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Id } from './common';
+import { TraversalProfileSchema } from './travel';
 
 export const CellIdSchema = z.string().min(1);
 export type CellId = z.infer<typeof CellIdSchema>;
@@ -9,6 +10,7 @@ export const GridCellBaseSchema = z.object({
   x: z.number().int(),
   y: z.number().int(),
   walkable: z.boolean(),
+  traversal: TraversalProfileSchema.optional(),
   biome: z.string().optional(),
   name: z.string().optional(),
   description: z.string().optional(),

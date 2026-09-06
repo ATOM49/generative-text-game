@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import { normalizeTraversal } from '@talespin/game-engine';
 import {
   WorldBlueprintSchema,
   WorldGenerationJobSchema,
@@ -499,6 +500,13 @@ export class WorldGenerationService {
             x: cell.x,
             y: cell.y,
             walkable: cell.walkable ?? true,
+            traversal: (cell.traversal ??
+              normalizeTraversal({
+                walkable: cell.walkable ?? true,
+                biome: cell.biome,
+                name: cell.name,
+                tags: cell.tags ?? [],
+              })) as Prisma.InputJsonValue,
             biome: cell.biome ?? null,
             name: cell.name ?? null,
             description: cell.description ?? null,
@@ -730,6 +738,12 @@ export class WorldGenerationService {
         x: coordinate.x,
         y: coordinate.y,
         walkable: true,
+        traversal: normalizeTraversal({
+          walkable: true,
+          biome: region.biome,
+          name: region.name,
+          tags: region.visualDetails,
+        }),
         biome: region.biome,
         name: region.name,
         description: region.summary,

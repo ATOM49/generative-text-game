@@ -2,19 +2,24 @@
 
 ## Status
 
-This document combines the current Talespin product with its intended narrative-game direction. Sections marked **Current** describe implemented repository behavior. Sections marked **Target** guide future work and must not be presented as already shipped.
+This document combines the current Talespin product with its narrative-game direction. Sections marked **Current** describe implemented repository behavior. Sections marked **Target** guide future work and must not be presented as already shipped.
 
 ## Product Concept
 
 **Current:** Talespin is a collaborative worldbuilding application. A builder can seed a persistent world from a theme and short premise; the generation service expands that seed into a world bible, map, image-grounded regions, factions, faction territory, and recurring characters. Generated maps, factions, and characters share a high-fidelity cinematic pixel-art direction; characters receive identity-stable pose language and story-derived signature props. Builders can also edit the map grid, locations, cultures, species, archetypes, and characters individually. Builder and explorer roles already distinguish content creation from play-oriented access.
 
-**Target:** Talespin becomes a text-based generative game in which an AI game master operates over durable, structured state. Players should interact with characters, locations, objectives, knowledge, and consequences rather than merely request the next block of prose.
+**Current explorer slice:** Talespin also runs a persistent, single-player,
+three-Chapter Story. The explorer travels cell by cell, meets world-authored or
+Story-scoped characters, resolves typed Interactions, completes Mission
+objectives, and reaches a state-selected Chapter 3 finale. The initial slice is
+an explicit state machine; tactical combat, multiplayer, and character
+promotion remain targets.
 
 Narrative prose is a view over game state. Authoritative state must not be reconstructed solely from prose.
 
 ## Narrative Hierarchy
 
-The target hierarchy is:
+The implemented hierarchy is:
 
 ```text
 Story
@@ -28,7 +33,18 @@ Story
 - A **Mission** is the primary stateful gameplay loop, with objectives and explicit success or failure conditions.
 - An **Interaction** is the smallest playable unit: dialogue, exploration, combat, investigation, decision, puzzle, skill check, or discovery.
 
-These contracts do not yet exist in `packages/schema`. Introduce them deliberately rather than repurposing current types by name alone.
+`Story`, `StoryParticipant`, `Chapter`, `Mission`, `Interaction`,
+`StoryCharacter`, and `NarrativeJob` have matching Zod and Prisma
+representations. Existing treasure-hunt types remain separate precedents.
+
+## Terrain-Aware Travel
+
+Every grid cell is selectable. `walkable` remains for compatibility but is not
+an impassability flag. Explicit traversal metadata wins; biome, name, and tags
+provide deterministic classification next; the legacy flag is only the final
+fallback. Routes still cross adjacent cells. Terrain legs that are unsuitable
+for walking pause before entry and offer mechanically valid contextual
+transport, with deterministic fallbacks when generation is unavailable.
 
 ## Current Gameplay Precedent
 

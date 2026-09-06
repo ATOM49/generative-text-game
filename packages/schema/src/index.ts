@@ -12,6 +12,9 @@ export * from './campaign.js';
 export * from './faction.js';
 export * from './character.js';
 export * from './region.js';
+export * from './story.js';
+export * from './travel.js';
+export * from './narrative.js';
 
 // Treasure Hunt Schemas
 export * from './player.js';

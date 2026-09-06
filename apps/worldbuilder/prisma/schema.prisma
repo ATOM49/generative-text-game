@@ -60,6 +60,70 @@ enum WorldGenerationJobStatus {
   FAILED
 }
 
+enum StoryStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+}
+
+enum StorySetupStatus {
+  QUEUED
+  GENERATING
+  READY
+  FAILED
+}
+
+enum ChapterStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
+enum MissionStatus {
+  PREPARING
+  ACTIVE
+  SUCCESS
+  FAILED
+}
+
+enum InteractionStatus {
+  READY
+  RESOLVING
+  RESOLVED
+  FAILED
+}
+
+enum InteractionKind {
+  MOVEMENT
+  TRANSPORT
+  DIALOGUE
+  EXPLORATION
+  DISCOVERY
+  DECISION
+  FINALE
+}
+
+enum NarrativeJobKind {
+  OUTLINE
+  MISSION_SETUP
+  INTERACTION
+  TRANSPORT
+  ACTION_RESOLUTION
+}
+
+enum NarrativeJobStatus {
+  QUEUED
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+enum MissionActionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
 /**
  * ---------- Authentication ----------
  */
@@ -73,26 +137,28 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts Account[]
-  sessions Session[]
-  authenticators Authenticator[]
+  accounts            Account[]
+  sessions            Session[]
+  authenticators      Authenticator[]
   worldGenerationJobs WorldGenerationJob[]
+  startedStories      Story[]              @relation("StoryStarter")
+  storyParticipations StoryParticipant[]
 }
 
 model Account {
-  id                       String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId                   String   @db.ObjectId
+  id                       String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId                   String  @db.ObjectId
   type                     String
   provider                 String
   providerAccountId        String
-  refresh_token            String?  @map("refresh_token")
-  refresh_token_expires_in Int?     @map("refresh_token_expires_in")
-  access_token             String?  @map("access_token")
+  refresh_token            String? @map("refresh_token")
+  refresh_token_expires_in Int?    @map("refresh_token_expires_in")
+  access_token             String? @map("access_token")
   expires_at               Int?
   token_type               String?
   scope                    String?
-  id_token                 String?  @map("id_token")
-  session_state            String?  @map("session_state")
+  id_token                 String? @map("id_token")
+  session_state            String? @map("session_state")
 
   user User @relation(fields: [userId], references: [id])
 
@@ -121,17 +187,17 @@ model VerificationToken {
 }
 
 model Authenticator {
-  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
-  credentialID        String   @unique
-  userId              String   @db.ObjectId
-  providerAccountId   String
-  credentialPublicKey String
-  counter             Int
+  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
+  credentialID         String   @unique
+  userId               String   @db.ObjectId
+  providerAccountId    String
+  credentialPublicKey  String
+  counter              Int
   credentialDeviceType String
-  credentialBackedUp  Boolean
-  transports          String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  credentialBackedUp   Boolean
+  transports           String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id])
 
@@ -157,6 +223,7 @@ model World {
   treasureHuntConfig      TreasureHuntConfig?
   playerWorldExplorations PlayerWorldExploration[]
   treasureHuntRuns        TreasureHuntRun[]
+  stories                 Story[]
 
   @@index([name])
 }
@@ -256,27 +323,207 @@ model Region {
 }
 
 model Character {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  worldId      String   @db.ObjectId
-  userId       String?  @db.ObjectId
-  name         String
-  description  String?
-  biography    String?
-  previewUrl   String?
-  gallery      Json?
-  promptHint   String?
-  traits       String[] @default([])
-  factionIds   String[] @default([]) @db.ObjectId
-  cultureIds   String[] @default([]) @db.ObjectId
-  speciesIds   String[] @default([]) @db.ObjectId
-  archetypeIds String[] @default([]) @db.ObjectId
-  meta         Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String             @id @default(auto()) @map("_id") @db.ObjectId
+  worldId             String             @db.ObjectId
+  userId              String?            @db.ObjectId
+  name                String
+  description         String?
+  biography           String?
+  previewUrl          String?
+  gallery             Json?
+  promptHint          String?
+  traits              String[]           @default([])
+  factionIds          String[]           @default([]) @db.ObjectId
+  cultureIds          String[]           @default([]) @db.ObjectId
+  speciesIds          String[]           @default([]) @db.ObjectId
+  archetypeIds        String[]           @default([]) @db.ObjectId
+  meta                Json?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  storyParticipations StoryParticipant[]
 
   @@index([worldId])
   @@index([worldId, name])
   @@index([worldId, userId])
+}
+
+/**
+ * ---------- Explorer Stories ----------
+ */
+model Story {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  worldId         String           @db.ObjectId
+  startedByUserId String           @db.ObjectId
+  title           String
+  status          StoryStatus      @default(ACTIVE)
+  setupStatus     StorySetupStatus @default(QUEUED)
+  setupError      String?
+  premise         String?
+  state           Json
+  startedAt       DateTime         @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  world           World              @relation(fields: [worldId], references: [id])
+  startedBy       User               @relation("StoryStarter", fields: [startedByUserId], references: [id])
+  participants    StoryParticipant[]
+  chapters        Chapter[]
+  missions        Mission[]
+  storyCharacters StoryCharacter[]
+  narrativeJobs   NarrativeJob[]
+
+  @@unique([worldId, startedByUserId])
+  @@index([startedByUserId, status])
+}
+
+model StoryParticipant {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  storyId     String   @db.ObjectId
+  userId      String   @db.ObjectId
+  characterId String   @db.ObjectId
+  joinedAt    DateTime @default(now())
+
+  story     Story     @relation(fields: [storyId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@unique([storyId, userId])
+  @@unique([storyId, characterId])
+  @@index([userId])
+  @@index([characterId])
+}
+
+model Chapter {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  storyId         String        @db.ObjectId
+  order           Int
+  title           String
+  summary         String
+  missionPrompt   String
+  status          ChapterStatus @default(PLANNED)
+  checkpointState Json
+  createdAt       DateTime      @default(now())
+  completedAt     DateTime?
+
+  story    Story     @relation(fields: [storyId], references: [id])
+  missions Mission[]
+
+  @@unique([storyId, order])
+  @@index([storyId, status])
+}
+
+model Mission {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  storyId           String        @db.ObjectId
+  chapterId         String        @db.ObjectId
+  retryOfMissionId  String?       @db.ObjectId
+  attempt           Int           @default(1)
+  title             String
+  summary           String
+  status            MissionStatus @default(PREPARING)
+  version           Int           @default(0)
+  startCellId       String        @db.ObjectId
+  destinationCellId String        @db.ObjectId
+  waypointCellIds   String[]      @db.ObjectId
+  encounterCellIds  String[]      @db.ObjectId
+  currentCellId     String        @db.ObjectId
+  revealedCellIds   String[]      @db.ObjectId
+  objectives        Json
+  maxActions        Int
+  actionsUsed       Int           @default(0)
+  travelPlan        Json?
+  startedAt         DateTime      @default(now())
+  endedAt           DateTime?
+
+  story        Story           @relation(fields: [storyId], references: [id])
+  chapter      Chapter         @relation(fields: [chapterId], references: [id])
+  interactions Interaction[]
+  actions      MissionAction[]
+
+  @@index([storyId, status])
+  @@index([chapterId, attempt])
+  @@index([retryOfMissionId])
+}
+
+model Interaction {
+  id               String            @id @default(auto()) @map("_id") @db.ObjectId
+  missionId        String            @db.ObjectId
+  sequence         Int
+  kind             InteractionKind
+  status           InteractionStatus @default(READY)
+  cellId           String            @db.ObjectId
+  traversedCellIds String[]          @default([]) @db.ObjectId
+  target           Json
+  blocking         Boolean           @default(true)
+  situation        String
+  choices          Json
+  transportOptions Json
+  playerAction     Json?
+  outcome          Json?
+  createdAt        DateTime          @default(now())
+  resolvedAt       DateTime?
+
+  mission Mission @relation(fields: [missionId], references: [id])
+
+  @@unique([missionId, sequence])
+  @@index([missionId, status])
+}
+
+model MissionAction {
+  id              String              @id @default(auto()) @map("_id") @db.ObjectId
+  missionId       String              @db.ObjectId
+  actionId        String
+  expectedVersion Int
+  status          MissionActionStatus @default(PENDING)
+  request         Json
+  response        Json?
+  error           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  mission Mission @relation(fields: [missionId], references: [id])
+
+  @@unique([missionId, actionId])
+  @@index([missionId, status])
+}
+
+model StoryCharacter {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  storyId       String   @db.ObjectId
+  name          String
+  description   String
+  traits        String[] @default([])
+  currentCellId String?  @db.ObjectId
+  createdAt     DateTime @default(now())
+
+  story Story @relation(fields: [storyId], references: [id])
+
+  @@index([storyId])
+  @@index([storyId, currentCellId])
+}
+
+model NarrativeJob {
+  id             String             @id @default(auto()) @map("_id") @db.ObjectId
+  storyId        String             @db.ObjectId
+  kind           NarrativeJobKind
+  status         NarrativeJobStatus @default(QUEUED)
+  targetId       String             @db.ObjectId
+  dedupeKey      String             @unique
+  input          Json?
+  proposal       Json?
+  attempt        Int                @default(0)
+  error          String?
+  leaseExpiresAt DateTime?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  story Story @relation(fields: [storyId], references: [id])
+
+  @@index([storyId, status, updatedAt])
+  @@index([kind, targetId])
 }
 
 /**
@@ -334,10 +581,11 @@ model GridCell {
   gridId String    @db.ObjectId
   grid   WorldGrid @relation(fields: [gridId], references: [id])
 
-  x        Int
-  y        Int
-  walkable Boolean
-  biome    String?
+  x           Int
+  y           Int
+  walkable    Boolean
+  traversal   Json?
+  biome       String?
   name        String?
   description String?
   tags        String[] @default([])

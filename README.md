@@ -44,6 +44,7 @@ Build workspace dependencies and initialize Prisma:
 
 ```bash
 pnpm build:schema
+pnpm build:game-engine
 pnpm build:ai
 pnpm build:cdn
 pnpm --filter @talespin/worldbuilder exec prisma generate
@@ -58,6 +59,7 @@ pnpm dev
 
 - Worldbuilder: <http://localhost:3000>
 - World-generation worker: polls MongoDB for queued or interrupted jobs
+- Narrative worker: prepares Stories, Missions, Interactions, and outcomes
 - Watcher: <http://localhost:4000> (returns `{"root":true}`)
 - MinIO console: <http://localhost:9001> (`minioadmin` / `minioadmin` locally)
 
@@ -68,16 +70,20 @@ Read [Local Development](docs/LOCAL_DEVELOPMENT.md) for environment choices, rea
 ## Common Commands
 
 ```bash
-pnpm dev                                  # worldbuilder + generation worker + watcher
+pnpm dev                                  # worldbuilder + both workers + watcher
 pnpm build                                # all packages and applications
 pnpm lint                                 # workspace ESLint
 pnpm test:world                           # world-generation job tests
+pnpm --filter @talespin/game-engine test  # deterministic travel and state rules
 pnpm --filter @talespin/watcher test      # watcher tests
 pnpm --filter @talespin/ai test           # provider package tests
+pnpm e2e:prepare                          # local services, builds, Prisma sync
+pnpm exec playwright test e2e/story-game-loop.spec.ts # fixture Story browser flow
 pnpm test:e2e:local                       # paid-provider browser flow
 ```
 
-When changing `packages/schema`, `packages/ai`, or `packages/cdn`, rebuild that package before running a consuming application.
+When changing `packages/schema`, `packages/game-engine`, `packages/ai`, or
+`packages/cdn`, rebuild that package before running a consuming application.
 
 ## Documentation
 

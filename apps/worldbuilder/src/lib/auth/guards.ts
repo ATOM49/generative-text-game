@@ -3,6 +3,7 @@ import { ApiError } from '@/lib/api/errors';
 import type { AppUserRole } from './roles';
 
 export const BUILDER_ONLY: AppUserRole[] = ['BUILDER'];
+export const EXPLORER_ONLY: AppUserRole[] = ['EXPLORER'];
 
 export type AuthenticatedUser = {
   id: string;

@@ -31,14 +31,15 @@ export default defineConfig({
     {
       name: 'watcher',
       command:
-        'pnpm build:schema && pnpm build:ai && pnpm build:cdn && pnpm build:watcher && pnpm --filter @talespin/watcher exec fastify start -l info -p 4100 dist/app.js',
+        'pnpm build:schema && pnpm build:game-engine && pnpm build:ai && pnpm build:cdn && pnpm build:watcher && pnpm --filter @talespin/watcher exec fastify start -l info -p 4100 dist/app.js',
       url: watcherUrl,
       timeout: 120_000,
       reuseExistingServer: false,
     },
     {
       name: 'worldbuilder',
-      command: 'pnpm --filter @talespin/worldbuilder dev --port 3100',
+      command:
+        'pnpm exec concurrently -k "pnpm --filter @talespin/worldbuilder dev --port 3100" "pnpm start:narrative-worker"',
       url: worldbuilderUrl,
       timeout: 120_000,
       reuseExistingServer: false,

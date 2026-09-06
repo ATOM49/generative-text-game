@@ -30,14 +30,10 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireUser();
+    await requireUser(BUILDER_ONLY);
     const { id: worldId } = await context.params;
     const body = await request.json();
-    const character = await characterService.createCharacter(
-      worldId,
-      body,
-      user.id,
-    );
+    const character = await characterService.createCharacter(worldId, body);
     return NextResponse.json(character, { status: 201 });
   } catch (error) {
     return handleApiError(error);

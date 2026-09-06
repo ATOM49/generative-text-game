@@ -125,3 +125,52 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes mission-travel-thumb-step {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  45% {
+    transform: translate(-50%, calc(-50% - 5px));
+  }
+  70% {
+    transform: translate(-50%, calc(-50% + 2px));
+  }
+}
+
+@keyframes destination-spoiler-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgb(120 53 15 / 85%),
+      5px 5px 0 rgb(120 53 15 / 70%);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 5px rgb(253 230 138 / 60%),
+      5px 5px 0 rgb(120 53 15 / 85%);
+    filter: brightness(1.25);
+  }
+}
+
+.destination-spoiler-highlight {
+  animation: destination-spoiler-pulse 900ms steps(2, end) infinite;
+  image-rendering: pixelated;
+}
+
+.mission-travel-thumb {
+  animation: mission-travel-thumb-step 560ms steps(3, end);
+  transform: translate(-50%, -50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mission-travel-thumb {
+    animation: none;
+  }
+
+  .destination-spoiler-highlight {
+    animation: none;
+  }
+}

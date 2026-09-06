@@ -10,27 +10,29 @@ Shared request, generation, and domain boundaries use schemas from `packages/sch
 
 ## ADR-002: Story owns the plot and references a World
 
-**Status:** Accepted (target)
+**Status:** Accepted (current)
 
-The future `Story` aggregate owns plot progression, chapters, and long-term narrative state. `World` remains the reusable setting and must not be renamed or duplicated to simulate Story support.
+The `Story` aggregate owns the explorer's world-specific narrative state,
+participation, plot progression, Chapters, Mission attempts, and completion.
+`World` remains the reusable setting and must not be renamed or duplicated.
 
 ## ADR-003: Missions are iterative gameplay loops
 
-**Status:** Accepted (target)
+**Status:** Accepted (current)
 
 A Mission evolves through player-driven Interactions and explicit terminal evaluation. It is not generated upfront as a static sequence. `TreasureHuntRun` and `TreasureHuntEvent` are the current precedent for durable loop state plus events.
 
 ## ADR-004: LLMs do not directly mutate authoritative state
 
-**Status:** Accepted (target; partially current)
+**Status:** Accepted (current)
 
 Models may generate narrative, interpret actions, and propose typed outcomes or changes. Zod validates the proposal; deterministic logic evaluates it; application services persist accepted transitions.
 
 ## ADR-005: Deterministic gameplay gets an independent boundary
 
-**Status:** Accepted (target)
+**Status:** Accepted (current)
 
-Mission rules, objectives, action validation, state changes, traversal, and inventory mechanics must be testable without an LLM. Create `packages/game-engine` when this behavior is implemented, not before.
+Mission rules, objectives, action validation, state changes, traversal, and inventory mechanics are implemented as pure functions in `packages/game-engine` and are testable without an LLM.
 
 ## ADR-006: Orchestration is not the domain model
 
@@ -48,7 +50,7 @@ Current locations are flat points with relative coordinates. A future hierarchy 
 
 **Status:** Accepted (current)
 
-Prisma remains in worldbuilder and orchestration remains in watcher until multiple consumers or independent testing justify extraction. Do not create empty `agents`, `game-engine`, `persistence`, or `shared` packages solely to match a diagram.
+Prisma remains in worldbuilder and generation remains in watcher until multiple consumers justify extraction. `packages/game-engine` is the concrete exception because worldbuilder consumes its tested deterministic rules. Do not create empty `agents`, `persistence`, or `shared` packages solely to match a diagram.
 
 ## ADR-009: Regions are semantic grid territories
 
@@ -64,7 +66,7 @@ Map, faction, and character generation share a descriptive high-fidelity pixel-a
 
 ## ADR-011: Explorer remains in the existing web application
 
-**Status:** Accepted (target)
+**Status:** Accepted (current)
 
 Builder and explorer are separate route and presentation surfaces inside
 `apps/worldbuilder`, sharing one top-level Next.js root layout, authentication,
@@ -75,7 +77,7 @@ authentication, or a stable remote game-server boundary justifies it.
 
 ## ADR-012: Character selection is Story participation
 
-**Status:** Accepted (target)
+**Status:** Accepted (current)
 
 Selecting an existing or player-created Character for play must create a typed
 association between the Story, authenticated User, and Character. Do not
@@ -85,7 +87,7 @@ legacy standalone Player model is deliberately reconciled with User.
 
 ## ADR-013: Generated narrative characters are Story-scoped
 
-**Status:** Accepted (target)
+**Status:** Accepted (current)
 
 Characters generated during Interactions receive stable identities and belong
 to the player's Story by default. They do not silently mutate shared World
@@ -93,10 +95,21 @@ canon. Promotion into the reusable World is an explicit builder operation.
 
 ## ADR-014: Agent harnesses do not own the gameplay loop
 
-**Status:** Accepted (target)
+**Status:** Accepted (current)
 
 The authoritative Mission loop remains typed, persisted, and deterministic.
 Use LangChain for focused generation and consider LangGraph when executable
 orchestration requires durable branching or interrupt/resume. Deep Agents may
 support bounded planning or play-testing workflows, but its plans, memory, and
 subagents are never authoritative Story, Mission, or Interaction state.
+
+## ADR-015: Every map cell is reachable through terrain-aware travel
+
+**Status:** Accepted (current)
+
+`GridCell.walkable` remains backward-compatible metadata, not a hard wall.
+Explicit traversal metadata wins over deterministic biome, name, and tag
+classification; `walkable` is only the legacy fallback. Routes cross adjacent
+cells and pause before special terrain until the player selects a mechanically
+valid transport. Deterministic fallback options prevent model failures from
+making a destination unreachable.

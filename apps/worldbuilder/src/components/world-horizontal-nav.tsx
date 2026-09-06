@@ -89,7 +89,7 @@ export function WorldHorizontalNav({
             variant="ghost"
             size="sm"
             className="uppercase tracking-[0.2em]"
-            onClick={() => router.push('/')}
+            onClick={() => router.push(userIsBuilder ? '/worlds' : '/explore')}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Worlds

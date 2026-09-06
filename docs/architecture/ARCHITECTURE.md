@@ -9,9 +9,12 @@ Browser
   |
   v
 apps/worldbuilder (Next.js UI + API routes)
-  |                         |
-  v                         v
-Prisma -> MongoDB      apps/watcher (Fastify)
+  |              |                          |
+  v              v                          v
+Prisma      packages/game-engine       apps/watcher (Fastify)
+  |          deterministic rules
+  v
+MongoDB
                             |          |
                             v          v
                     packages/ai          packages/cdn
@@ -33,6 +36,12 @@ validated blueprint checkpoint, and atomically commits the authoritative world
 package. Failed attempts require an explicit builder retry; interrupted leased
 attempts are automatically eligible for another worker.
 
+Story play uses the same durable pattern. A narrative worker claims leased
+`NarrativeJob` records for outlines, Mission setup, Interactions, and action
+resolution. Model calls occur outside database transactions. Worldbuilder then
+validates the proposal, invokes pure rules from `packages/game-engine`, and
+persists accepted state transitions and ordered history.
+
 ## Local Runtime
 
 The supported local stack uses Node 20.19.0, pnpm 10.13.1, Docker Compose, a single-node MongoDB replica set, and MinIO. Shared workspace packages publish local `dist` exports consumed by both apps, so they must be built after a fresh install. Environment templates live beside each app; the authoritative commands and provider choices are documented in [`../LOCAL_DEVELOPMENT.md`](../LOCAL_DEVELOPMENT.md).
@@ -45,28 +54,32 @@ Prompt text, character staging, and Talespin visual rules must not move into pro
 
 ## Explorer Runtime
 
-The accepted explorer architecture keeps builder and explorer experiences in
-the existing Next.js application with one root layout and distinct nested route
-surfaces. Explorer play uses the established Story -> Chapter -> Mission ->
-Interaction hierarchy, a future deterministic game-engine boundary, Story-scoped
-player participation, and typed proposals from watcher. Deep Agents is not part
-of the authoritative Mission loop. See [`EXPLORER.md`](EXPLORER.md) for the
-route, ownership, state, runtime, and implementation decisions.
+The explorer flow lives in the existing Next.js application. It persists Story
+participants, three ordered Chapters, versioned Mission attempts, ordered
+Interactions, idempotent actions, and Story-scoped generated characters. The
+active Mission map accepts any grid cell, while `packages/game-engine` owns
+terrain normalization, route and leg calculation, transport validation, costs,
+objectives, and progression predicates. Deep Agents and LangGraph are not part
+of the authoritative Mission loop. See [`EXPLORER.md`](EXPLORER.md).
+
+The route surfaces remain explicit: `/worlds` owns world creation and
+management, `/explore` owns world discovery and Story entry, and `/` is the
+experience gateway that switches the current authenticated role.
 
 ## Mapping from the Proposed Architecture
 
 | Proposed responsibility | Current location                       | Status                                                  |
 | ----------------------- | -------------------------------------- | ------------------------------------------------------- |
-| Player-facing web app   | `apps/worldbuilder`                    | Implemented for building; narrative play is incomplete. |
-| Game server             | Next.js API routes plus `apps/watcher` | Split boundary; no authoritative game runtime yet.      |
-| Domain package          | `packages/schema`                      | Implemented as Zod contracts.                           |
-| Game engine             | No dedicated package                   | Add when mission transition logic is implemented.       |
-| Agent orchestration     | Watcher chains and prompts             | LangChain runnables exist; LangGraph does not.          |
+| Player-facing web app   | `apps/worldbuilder`                    | Builder, Story preparation, and active Mission views.   |
+| Game server             | Next.js API routes plus `apps/watcher` | Authoritative services plus typed generation proposals. |
+| Domain package          | `packages/schema`                      | Zod contracts for worldbuilding and narrative play.     |
+| Game engine             | `packages/game-engine`                 | Pure travel, state-change, and objective rules.         |
+| Agent orchestration     | Narrative jobs and watcher chains      | Durable app state machine; LangGraph is deferred.       |
 | Persistence package     | Worldbuilder Prisma/services           | Keep current until reuse justifies extraction.          |
 | Generic shared package  | None                                   | Do not create a dumping ground.                         |
 | Media infrastructure    | `packages/cdn`                         | Implemented with MinIO and Sharp.                       |
 
-## Target Gameplay Boundary
+## Gameplay Boundary
 
 The target dependency direction is:
 
@@ -93,8 +106,8 @@ Runtime data may flow back to the client, but lower layers must not import highe
 
 ## Evolution Strategy
 
-1. Add Story, Chapter, Mission, Interaction, action, outcome, and state-change contracts to `packages/schema` as real features require them.
-2. Introduce `packages/game-engine` with the first deterministic mission transition; require pure-function tests.
+1. Extend the implemented Story, Chapter, Mission, Interaction, action, outcome, and state-change contracts only alongside working behavior.
+2. Keep new deterministic Mission and travel rules in `packages/game-engine` with pure-function tests.
 3. Introduce `packages/agents` only when an actual graph or reusable gameplay orchestration exists. Keep model adapters in `packages/ai`.
 4. Keep Prisma repositories in worldbuilder until both applications need authoritative game-state access; then extract persistence behind typed repository interfaces.
 5. Preserve `apps/watcher` as the server-side generation boundary unless a deliberate game-server consolidation replaces it.

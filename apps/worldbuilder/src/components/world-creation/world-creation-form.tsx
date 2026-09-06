@@ -500,7 +500,7 @@ export function WorldCreationForm() {
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => router.push('/')}
+                  onClick={() => router.push('/worlds')}
                   disabled={isDispatching}
                 >
                   <ArrowLeft />

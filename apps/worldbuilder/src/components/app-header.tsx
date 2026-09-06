@@ -13,6 +13,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, LogOut, Settings } from 'lucide-react';
 import { LogoutButton } from '@/components/auth/logout-button';
+import Link from 'next/link';
 
 export function AppHeader() {
   const { data: session } = useSession();
@@ -24,7 +25,9 @@ export function AppHeader() {
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background px-6">
       <div className="flex items-center">
-        <h1 className="text-xl font-bold">Talespin</h1>
+        <Link href="/" className="text-xl font-bold">
+          Talespin
+        </Link>
       </div>
 
       <div className="flex items-center gap-4">

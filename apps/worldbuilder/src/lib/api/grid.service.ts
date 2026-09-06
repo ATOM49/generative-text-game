@@ -1,6 +1,12 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import { normalizeTraversal } from '@talespin/game-engine';
 import { ApiError } from './errors';
-import type { GridCell, WorldGrid } from '@talespin/schema';
+import {
+  TraversalProfileSchema,
+  type GridCell,
+  type TraversalProfile,
+  type WorldGrid,
+} from '@talespin/schema';
 
 export const DEFAULT_GRID_WIDTH = 8;
 export const DEFAULT_GRID_HEIGHT = 8;
@@ -10,6 +16,7 @@ export type GridCellTemplate = {
   x: number;
   y: number;
   walkable?: boolean;
+  traversal?: TraversalProfile;
   biome?: string;
   name?: string;
   description?: string;
@@ -37,6 +44,7 @@ const gridSelect = {
         x: true,
         y: true,
         walkable: true,
+        traversal: true,
         biome: true,
         name: true,
         description: true,
@@ -61,11 +69,29 @@ type PrismaGrid = {
     x: number;
     y: number;
     walkable: boolean;
+    traversal: unknown;
     biome: string | null;
     name: string | null;
     description: string | null;
     tags: string[];
   }>;
+};
+
+type TraversalRegion = {
+  cellIds: string[];
+  name: string;
+  biome: string;
+  atmosphere: string;
+};
+
+const regionTermsByCell = (regions: TraversalRegion[]) => {
+  const terms = new Map<string, string[]>();
+  regions.forEach((region) => {
+    region.cellIds.forEach((cellId) => {
+      terms.set(cellId, [region.name, region.biome, region.atmosphere]);
+    });
+  });
+  return terms;
 };
 
 export class GridService {
@@ -74,16 +100,25 @@ export class GridService {
   async getWorldGrid(
     worldId: string,
   ): Promise<{ grid: WorldGrid; cells: GridCell[] }> {
-    const grid = await this.prisma.worldGrid.findUnique({
-      where: { worldId },
-      select: gridSelect.select,
-    });
+    const [grid, regions] = await Promise.all([
+      this.prisma.worldGrid.findUnique({
+        where: { worldId },
+        select: gridSelect.select,
+      }),
+      this.prisma.region.findMany({
+        where: { worldId },
+        select: { cellIds: true, name: true, biome: true, atmosphere: true },
+      }),
+    ]);
 
     if (!grid) {
       throw new ApiError(404, 'World grid not found');
     }
 
-    return this.mapGrid(grid as PrismaGrid);
+    return this.mapGrid(
+      grid as PrismaGrid,
+      regionTermsByCell(regions as TraversalRegion[]),
+    );
   }
 
   async updateCell(cellId: string, data: Partial<GridCell>) {
@@ -91,6 +126,7 @@ export class GridService {
       where: { id: cellId },
       data: {
         walkable: data.walkable,
+        traversal: data.traversal as Prisma.InputJsonValue | undefined,
         biome: data.biome,
         name: data.name,
         description: data.description,
@@ -104,11 +140,58 @@ export class GridService {
       x: cell.x,
       y: cell.y,
       walkable: cell.walkable,
+      traversal:
+        TraversalProfileSchema.safeParse(cell.traversal).data ??
+        normalizeTraversal({
+          walkable: cell.walkable,
+          biome: cell.biome ?? undefined,
+          name: cell.name ?? undefined,
+          tags: cell.tags,
+        }),
       biome: cell.biome ?? undefined,
       name: cell.name ?? undefined,
       description: cell.description ?? undefined,
       tags: cell.tags ?? [],
     };
+  }
+
+  async backfillTraversalProfiles(): Promise<number> {
+    const cells = await this.prisma.gridCell.findMany({
+      select: {
+        id: true,
+        gridId: true,
+        walkable: true,
+        traversal: true,
+        biome: true,
+        name: true,
+        tags: true,
+      },
+    });
+    const gridIds = Array.from(new Set(cells.map((cell) => cell.gridId)));
+    const regions = await this.prisma.region.findMany({
+      where: { gridId: { in: gridIds } },
+      select: { cellIds: true, name: true, biome: true, atmosphere: true },
+    });
+    const regionTerms = regionTermsByCell(regions);
+    const missing = cells.filter(
+      (cell) => !TraversalProfileSchema.safeParse(cell.traversal).success,
+    );
+    await Promise.all(
+      missing.map((cell) =>
+        this.prisma.gridCell.update({
+          where: { id: cell.id },
+          data: {
+            traversal: normalizeTraversal({
+              walkable: cell.walkable,
+              biome: cell.biome ?? undefined,
+              name: cell.name ?? undefined,
+              tags: [...cell.tags, ...(regionTerms.get(cell.id) ?? [])],
+            }) as Prisma.InputJsonValue,
+          },
+        }),
+      ),
+    );
+    return missing.length;
   }
 
   async createDefaultGrid(
@@ -214,15 +297,26 @@ export class GridService {
     for (let y = 0; y < template.height; y += 1) {
       for (let x = 0; x < template.width; x += 1) {
         const override = overrides.get(`${x}:${y}`);
+        const walkable = override?.walkable ?? true;
+        const biome = override?.biome;
+        const name = override?.name;
+        const tags = override?.tags ?? [];
         payload.push({
           gridId,
           x,
           y,
-          walkable: override?.walkable ?? true,
-          biome: override?.biome ?? null,
-          name: override?.name ?? null,
+          walkable,
+          traversal: (override?.traversal ??
+            normalizeTraversal({
+              walkable,
+              biome,
+              name,
+              tags,
+            })) as Prisma.InputJsonValue,
+          biome: biome ?? null,
+          name: name ?? null,
           description: override?.description ?? null,
-          tags: override?.tags ?? [],
+          tags,
         });
       }
     }
@@ -230,7 +324,10 @@ export class GridService {
     return payload;
   }
 
-  private mapGrid(grid: PrismaGrid): { grid: WorldGrid; cells: GridCell[] } {
+  private mapGrid(
+    grid: PrismaGrid,
+    regionTerms: Map<string, string[]> = new Map(),
+  ): { grid: WorldGrid; cells: GridCell[] } {
     return {
       grid: {
         _id: grid.id,
@@ -245,6 +342,14 @@ export class GridService {
         x: cell.x,
         y: cell.y,
         walkable: cell.walkable,
+        traversal:
+          TraversalProfileSchema.safeParse(cell.traversal).data ??
+          normalizeTraversal({
+            walkable: cell.walkable,
+            biome: cell.biome ?? undefined,
+            name: cell.name ?? undefined,
+            tags: [...(cell.tags ?? []), ...(regionTerms.get(cell.id) ?? [])],
+          }),
         biome: cell.biome ?? undefined,
         name: cell.name ?? undefined,
         description: cell.description ?? undefined,

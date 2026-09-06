@@ -107,6 +107,7 @@ Workspace consumers import built `dist` exports from the shared packages. Build 
 
 ```bash
 pnpm build:schema
+pnpm build:game-engine
 pnpm build:ai
 pnpm build:cdn
 ```
@@ -118,7 +119,17 @@ pnpm --filter @talespin/worldbuilder exec prisma generate
 pnpm --filter @talespin/worldbuilder exec prisma db push
 ```
 
-Repeat the relevant shared-package build after editing `packages/schema`, `packages/ai`, or `packages/cdn`. After Prisma changes, run both Prisma commands again.
+Repeat the relevant shared-package build after editing `packages/schema`,
+`packages/game-engine`, `packages/ai`, or `packages/cdn`. After Prisma changes,
+run both Prisma commands again. Existing grids can receive traversal metadata
+without regeneration:
+
+```bash
+pnpm --filter @talespin/worldbuilder backfill:grid-traversal
+```
+
+The backfill is idempotent. Runtime normalization also keeps unbackfilled cells
+playable.
 
 ## 5. Run the Applications
 
@@ -130,12 +141,13 @@ This starts:
 
 - `@talespin/worldbuilder` at <http://localhost:3000>
 - the durable world-generation worker, which polls MongoDB for queued jobs
+- the durable narrative worker, which polls MongoDB for Story and Mission jobs
 - `@talespin/watcher` at <http://localhost:4000>
 
 The worker is a separate long-running process. Production deployments must run
-`pnpm start:world-worker` (or the equivalent process command) alongside the web
-application; web requests only enqueue or retry jobs and never execute provider
-generation inline.
+`pnpm start:world-worker` and `pnpm start:narrative-worker` (or equivalent
+process commands) alongside the web application; web requests only enqueue or
+retry jobs and never execute provider generation inline.
 
 Verify watcher independently:
 
@@ -149,6 +161,7 @@ The response should be `{"root":true}`. Sign in to worldbuilder, select the `BUI
 
 ```bash
 pnpm test:world
+pnpm --filter @talespin/game-engine test
 pnpm --filter @talespin/watcher test
 pnpm --filter @talespin/ai test
 pnpm build
@@ -161,10 +174,16 @@ For the browser flow:
 
 ```bash
 pnpm test:e2e:install
+pnpm e2e:prepare
+pnpm exec playwright test e2e/story-game-loop.spec.ts
 pnpm test:e2e:local
 ```
 
-Playwright uses worldbuilder port `3100` and watcher port `4100`, stores artifacts under `test-results/`, and can make real paid AI calls.
+The focused Story command seeds a disposable four-by-four World and uses the
+deterministic E2E narrative fixtures, so it verifies all three Chapters without
+paid model calls. `pnpm test:e2e:local` runs the complete Playwright suite,
+including the paid-provider world-generation flow. Playwright uses worldbuilder
+port `3100` and watcher port `4100` and stores artifacts under `test-results/`.
 
 ## Troubleshooting
 
@@ -190,7 +209,8 @@ docker compose logs minio minio-setup
 
 ### A shared import cannot resolve `dist`
 
-Rebuild the owning package with `pnpm build:schema`, `pnpm build:ai`, or `pnpm build:cdn`.
+Rebuild the owning package with `pnpm build:schema`,
+`pnpm build:game-engine`, `pnpm build:ai`, or `pnpm build:cdn`.
 
 ## Shutdown and Data
 
