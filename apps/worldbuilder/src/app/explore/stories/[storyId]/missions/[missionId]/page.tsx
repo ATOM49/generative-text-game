@@ -18,6 +18,7 @@ import {
   Eye,
   EyeOff,
   Footprints,
+  History,
   MapPin,
   MessageCircle,
   Pause,
@@ -52,6 +53,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { useApiMutation, useApiQuery } from '@/hooks/useApiQuery';
@@ -213,6 +222,9 @@ function MissionPageContent({
   const currentCell = view.grid.cells.find(
     (cell) => cell._id === view.mission.currentCellId,
   );
+  const resolvedInteractions = view.interactions.filter(
+    (item) => item.status === 'RESOLVED',
+  );
 
   const selectDestination = (cell: GridCell) => {
     if (disabled || interaction || view.mission.status !== 'ACTIVE') return;
@@ -359,11 +371,71 @@ function MissionPageContent({
               <ArrowLeft className="mr-2 h-4 w-4" /> Story
             </Link>
           </Button>
-          <div className="text-right">
-            <p className="text-xs font-semibold uppercase tracking-widest text-primary">
-              Chapter {view.chapter.order} of 3
-            </p>
-            <h1 className="text-2xl font-bold">{view.mission.title}</h1>
+          <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-3">
+            <div className="min-w-0 text-right">
+              <p className="truncate text-xs font-semibold uppercase tracking-widest text-primary">
+                {view.world.name}
+              </p>
+              <h1 className="truncate text-2xl font-bold">
+                {view.story.title}
+              </h1>
+              <p className="truncate text-xs text-muted-foreground">
+                <span>Chapter {view.chapter.order} of 3</span>
+                <span aria-hidden="true"> · </span>
+                <span>{view.mission.title}</span>
+              </p>
+            </div>
+
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <History className="h-4 w-4" />
+                  Journey history
+                  {resolvedInteractions.length > 0 ? (
+                    <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] leading-none text-primary-foreground">
+                      {resolvedInteractions.length}
+                    </span>
+                  ) : null}
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-full sm:max-w-md">
+                <SheetHeader className="border-b pr-12">
+                  <SheetTitle className="flex items-center gap-2">
+                    <History className="h-4 w-4" /> Journey history
+                  </SheetTitle>
+                  <SheetDescription>
+                    Resolved events from {view.mission.title}, newest first.
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+                  {resolvedInteractions.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                      Your choices and their consequences will appear here as
+                      the journey unfolds.
+                    </div>
+                  ) : (
+                    <ol className="space-y-4">
+                      {resolvedInteractions
+                        .slice()
+                        .reverse()
+                        .map((item) => (
+                          <li
+                            key={item._id}
+                            className="border-l-2 border-primary/30 pl-4"
+                          >
+                            <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                              {item.kind}
+                            </p>
+                            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                              {item.outcome?.narrative ?? item.situation}
+                            </p>
+                          </li>
+                        ))}
+                    </ol>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
 
@@ -385,17 +457,17 @@ function MissionPageContent({
           </Alert>
         )}
 
-        <div className="grid min-h-[70vh] gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.55fr)]">
+        <div className="grid min-h-[70vh] gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px]">
           <Card className="overflow-hidden">
-            <CardHeader className="pb-3">
+            <CardHeader className="py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Compass className="h-5 w-5" /> {view.world.name}
-                  </CardTitle>
-                  <CardDescription>
-                    Select any cell to plan a route. Terrain changes determine
-                    how you cross it.
+                <div className="min-w-0 flex-1">
+                  <CardDescription className="flex items-start gap-2">
+                    <Compass className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      Select any cell to plan a route. Terrain changes determine
+                      how you cross it.
+                    </span>
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-3">
@@ -542,7 +614,7 @@ function MissionPageContent({
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="h-[62vh] min-h-[480px]">
+              <div className="h-[66vh] min-h-[500px]">
                 <MapViewer
                   imageUrl={view.world.mapImageUrl ?? ''}
                   grid={view.grid}
@@ -701,28 +773,6 @@ function MissionPageContent({
                 )}
               </CardContent>
             </Card>
-
-            {view.interactions.some((item) => item.status === 'RESOLVED') && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Recent journey</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {view.interactions
-                    .filter((item) => item.status === 'RESOLVED')
-                    .slice(-5)
-                    .reverse()
-                    .map((item) => (
-                      <div key={item._id} className="border-l-2 pl-3 text-sm">
-                        <p className="font-medium">{item.kind}</p>
-                        <p className="text-muted-foreground">
-                          {item.outcome?.narrative ?? item.situation}
-                        </p>
-                      </div>
-                    ))}
-                </CardContent>
-              </Card>
-            )}
           </div>
         </div>
       </div>

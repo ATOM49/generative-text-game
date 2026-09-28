@@ -288,9 +288,19 @@ test('explorer completes three terrain-aware chapters and the selected finale', 
       .toBeTruthy();
     const missionId = story!.activeMissionId!;
     await page.goto(`/explore/stories/${storyId}/missions/${missionId}`);
+    await expect(page.getByText(worldName, { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: story!.title }),
+    ).toBeVisible();
     await expect(
       page.getByText(`Chapter ${chapterOrder} of 3`, { exact: true }),
     ).toBeVisible();
+    await page.getByRole('button', { name: 'Journey history' }).click();
+    const journeyHistory = page.getByRole('dialog', {
+      name: 'Journey history',
+    });
+    await expect(journeyHistory).toBeVisible();
+    await journeyHistory.getByRole('button', { name: 'Close' }).click();
     const travelCost = page.getByRole('progressbar', {
       name: 'Mission travel cost',
     });
