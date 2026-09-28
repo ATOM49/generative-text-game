@@ -7,6 +7,7 @@
   "scripts": {
     "test": "npm run build:ts && tsc -p test/tsconfig.json && FASTIFY_AUTOLOAD_TYPESCRIPT=1 c8 node --test --loader ts-node/esm \"test/**/*.test.ts\"",
     "start": "npm run build:ts && fastify start -l info -p 4000 dist/app.js",
+    "start:prod": "fastify start -l info -a 0.0.0.0 -p ${PORT:-4000} dist/app.js",
     "build:ts": "tsc -p tsconfig.build.json",
     "watch:ts": "tsc -w -p tsconfig.build.json",
     "dev": "npm run build:ts && concurrently -k -p \"[{name}]\" -n \"TypeScript,App\" -c \"yellow.bold,cyan.bold\" \"npm:watch:ts\" \"npm:dev:start\"",
