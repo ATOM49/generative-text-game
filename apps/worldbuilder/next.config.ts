@@ -4,21 +4,26 @@ type RemotePattern = NonNullable<
   NonNullable<NextConfig['images']>['remotePatterns']
 >[number];
 
-// Allow next/image to optimize generated art from the configured CDN. Next
-// reads this config at both `next build` and `next start`, so set
-// MINIO_PUBLIC_HOST and MINIO_BUCKET in both environments.
+// Allow next/image to optimize generated art from the configured CDN. Mirrors
+// resolvePublicBaseUrl in packages/cdn: MINIO_PUBLIC_BASE_URL (bucket root,
+// e.g. an R2 public domain) wins over path-style MINIO_PUBLIC_HOST/MINIO_BUCKET.
+// Next reads this at build and start (Vercel bakes it in at build), so set the
+// same values in every environment.
 const cdnImagePattern = (): RemotePattern => {
-  const publicHost = new URL(
-    process.env.MINIO_PUBLIC_HOST || 'http://localhost:9000',
-  );
   const bucket = process.env.MINIO_BUCKET || 'images';
-  const basePath = publicHost.pathname.replace(/\/+$/, '');
+  const publicHost = (
+    process.env.MINIO_PUBLIC_HOST || 'http://localhost:9000'
+  ).replace(/\/+$/, '');
+  const baseUrl = new URL(
+    process.env.MINIO_PUBLIC_BASE_URL || `${publicHost}/${bucket}`,
+  );
+  const basePath = baseUrl.pathname.replace(/\/+$/, '');
 
   return {
-    protocol: publicHost.protocol === 'https:' ? 'https' : 'http',
-    hostname: publicHost.hostname,
-    port: publicHost.port,
-    pathname: `${basePath}/${bucket}/**`,
+    protocol: baseUrl.protocol === 'https:' ? 'https' : 'http',
+    hostname: baseUrl.hostname,
+    port: baseUrl.port,
+    pathname: `${basePath}/**`,
   };
 };
 
