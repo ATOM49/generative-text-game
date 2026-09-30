@@ -147,7 +147,9 @@ This starts:
 The worker is a separate long-running process. Production deployments must run
 `pnpm start:world-worker` and `pnpm start:narrative-worker` (or equivalent
 process commands) alongside the web application; web requests only enqueue or
-retry jobs and never execute provider generation inline.
+retry jobs and never execute provider generation inline. Vercel deployments
+are the exception: they run jobs inline after responses (see
+[Deployment](DEPLOYMENT.md)).
 
 Verify watcher independently:
 
